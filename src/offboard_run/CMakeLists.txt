@@ -13,6 +13,10 @@ find_package(catkin REQUIRED COMPONENTS
   mavros_msgs
   roscpp
   std_msgs
+  tf2
+  tf2_ros
+  tf2_sensor_msgs
+  tf2_geometry_msgs
 )
 
 find_package(Eigen3 REQUIRED)
@@ -210,6 +214,6 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 add_executable(offboard_run_node src/offboard_node.cpp)
-target_link_libraries(offboard_node
+target_link_libraries(offboard_run_node
   ${catkin_LIBRARIES}
 )
