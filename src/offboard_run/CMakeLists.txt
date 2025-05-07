@@ -111,10 +111,10 @@ find_package(Eigen3 REQUIRED)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
- INCLUDE_DIRS include
-#  LIBRARIES offboard_run
-#  CATKIN_DEPENDS geometry_msgs mavros_msgs roscpp std_msgs
-#  DEPENDS system_lib
+  INCLUDE_DIRS include
+  #  LIBRARIES offboard_run
+  #  CATKIN_DEPENDS geometry_msgs mavros_msgs roscpp std_msgs
+  #  DEPENDS system_lib
 )
 
 ###########
@@ -214,6 +214,13 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 add_executable(offboard_run_node src/offboard_node.cpp)
+add_executable(demo_node src/demo3.cpp)
+
 target_link_libraries(offboard_run_node
+  ${catkin_LIBRARIES}
+)
+
+
+target_link_libraries(demo_node
   ${catkin_LIBRARIES}
 )

@@ -1,9 +1,10 @@
-#include <Eigen/Eigen>
-#include <cmath>
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Odometry.h>
-#include <queue>
 #include <ros/ros.h>
+
+#include <Eigen/Eigen>
+#include <cmath>
+#include <queue>
 
 Eigen::Vector3d p_lidar_body, p_enu;
 Eigen::Quaterniond q_mav;
@@ -11,7 +12,7 @@ Eigen::Quaterniond q_px4_odom;
 geometry_msgs::PoseStamped vision;
 
 class SlidingWindowAverage {
-public:
+ public:
   SlidingWindowAverage(int windowSize)
       : windowSize(windowSize), windowSum(0.0) {}
 
@@ -31,19 +32,19 @@ public:
       windowSum -= dataQueue.front();
       dataQueue.pop();
     }
-    windowAvg = windowSum / dataQueue.size();
+    windowAvg_ = windowSum / dataQueue.size();
     // 返回当前窗口内的平均值
-    return windowAvg;
+    return windowAvg_;
   }
 
   int get_size() { return dataQueue.size(); }
 
-  double get_avg() { return windowAvg; }
+  double get_avg() { return windowAvg_; }
 
-private:
+ private:
   int windowSize;
   double windowSum;
-  double windowAvg;
+  double windowAvg_;
   std::queue<double> dataQueue;
 };
 
@@ -58,7 +59,6 @@ double fromQuaternion2yaw(Eigen::Quaterniond q) {
 }
 
 void vins_callback(const nav_msgs::Odometry::ConstPtr &msg) {
-
   p_lidar_body =
       Eigen::Vector3d(msg->pose.pose.position.x, msg->pose.pose.position.y,
                       msg->pose.pose.position.z);
@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
     if (swa.get_size() == windowSize && !init_flag) {
       init_yaw = swa.get_avg();
       init_flag = 1;
-      init_q = Eigen::AngleAxisd(init_yaw, Eigen::Vector3d::UnitZ()) // des.yaw
+      init_q = Eigen::AngleAxisd(init_yaw, Eigen::Vector3d::UnitZ())  // des.yaw
                * Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
                Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
       // delete swa;
@@ -118,11 +118,12 @@ int main(int argc, char **argv) {
 
       vision_pub.publish(vision);
 
-      ROS_INFO("\nposition in enu:\n   x: %.18f\n   y: %.18f\n   z: "
-               "%.18f\norientation of lidar:\n   x: %.18f\n   y: %.18f\n   z: "
-               "%.18f\n   w: %.18f",
-               p_enu[0], p_enu[1], p_enu[2], q_mav.x(), q_mav.y(), q_mav.z(),
-               q_mav.w());
+      ROS_INFO(
+          "\nposition in enu:\n   x: %.18f\n   y: %.18f\n   z: "
+          "%.18f\norientation of lidar:\n   x: %.18f\n   y: %.18f\n   z: "
+          "%.18f\n   w: %.18f",
+          p_enu[0], p_enu[1], p_enu[2], q_mav.x(), q_mav.y(), q_mav.z(),
+          q_mav.w());
     }
 
     ros::spinOnce();
