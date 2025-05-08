@@ -8,8 +8,7 @@ class SlidingWindowPoseAverage {
  public:
   SlidingWindowPoseAverage(int windowSize) : windowSize(windowSize) {}
 
-  geometry_msgs::PoseStamped addPose(
-      const geometry_msgs::PoseStamped& newPose) {
+  void addPose(const geometry_msgs::PoseStamped& newPose) {
     if (!poseQueue.empty() &&
         exceedsResetThreshold(newPose, poseQueue.back())) {
       reset(newPose);
@@ -29,8 +28,6 @@ class SlidingWindowPoseAverage {
       removeQuaternion(toEigenQuaternion(oldPose.pose.orientation));
       poseQueue.pop();
     }
-
-    return computeAveragePose();
   }
 
   geometry_msgs::PoseStamped computeAveragePose() const {
