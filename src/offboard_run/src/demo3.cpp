@@ -1,9 +1,7 @@
-#include <Eigen/Dense>
-#include <cmath>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <mavros_msgs/CommandBool.h>
-#include <mavros_msgs/PositionTarget.h>
+#include <mavros_msgs/PositionTarget.h> // 新头文件
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/State.h>
 #include <nav_msgs/Odometry.h>
@@ -12,6 +10,10 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
+
+#include <Eigen/Dense>
+#include <cmath>
+#include <functional>
 
 #include "offboard_run/SlidingWindowAverage.h"
 #include "ros/console.h"
@@ -26,30 +28,303 @@ public:
       : tf_buffer_(), tf_listener_(tf_buffer_, nh), static_tf_broadcaster_() {
     // 初始化发布器和订阅器
     state_sub_ = nh.subscribe<mavros_msgs::State>(
-        "mavros/state", 10, // 增加队列大小
+        "mavros/state", 10,
         std::bind(&mavros_ctrl::state_cb, this, std::placeholders::_1));
     px4_pose_sub_ = nh.subscribe<geometry_msgs::PoseStamped>(
-        "mavros/local_position/pose", 10, // 增加队列大小
+        "/mavros/local_position/pose", 10,
         std::bind(&mavros_ctrl::px4_pose_cb, this, std::placeholders::_1));
-    global_px4_pos_pub_ = nh.advertise<geometry_msgs::PoseStamped>(
-        "mavros/setpoint_position/local", 10);
+
+    // 修改为使用setpoint_raw/local
+    raw_pos_pub_ = nh.advertise<mavros_msgs::PositionTarget>(
+        "/mavros/setpoint_raw/local", 10);
+
     arming_client_ =
         nh.serviceClient<mavros_msgs::CommandBool>("mavros/cmd/arming");
     set_mode_client_ =
         nh.serviceClient<mavros_msgs::SetMode>("mavros/set_mode");
     target_pos_sub_ = nh.subscribe<geometry_msgs::PoseStamped>(
-        "/target_position", 10, // 增加队列大小
+        "/target_position", 10,
         std::bind(&mavros_ctrl::target_pos_cb, this, std::placeholders::_1));
     current_world_body_pos_pub_ =
         nh.advertise<geometry_msgs::PoseStamped>("/current_world_body_pos", 10);
 
-    // 初始化默认姿态
-    default_pose_.pose.position.x = 0;
-    default_pose_.pose.position.y = 0;
-    default_pose_.pose.position.z = 1.2;
-    default_pose_.pose.orientation.w = 1.0; // 单位四元数
+    // 初始化默认位置目标
+    initializePositionTarget(4, false, Eigen::Vector3d(0, 0, 1.2),
+                             Eigen::Vector3d(0, 0, 0),
+                             Eigen::Vector3d(0.0, 0.0, 6.0));
+  }
 
-    // 设置加速度
+  // 初始化默认位置目标
+  /**
+   * 初始化位置目标，支持不同的控制组合
+   *
+   * @param control_mode 控制模式:
+   *     0: 仅位置控制 (x, y, z)
+   *     1: 仅速度控制 (vx, vy, vz)
+   *     2: 仅加速度控制 (afx, afy, afz)
+   *     3: 位置+速度控制
+   *     4: 位置+速度+加速度控制
+   * @param use_body_frame 是否使用机体坐标系 (true: BODY_NED, false: LOCAL_NED)
+   * @param position 位置设定点 (x, y, z)
+   * @param velocity 速度设定点 (vx, vy, vz)
+   * @param acceleration 加速度设定点 (afx, afy, afz)
+   * @param yaw 偏航角设定值 (弧度)
+   * @param yaw_rate 偏航角速率 (弧度/秒)
+   */
+  void initializePositionTarget(
+      int control_mode = 0, bool use_body_frame = false,
+      const Eigen::Vector3d &position = Eigen::Vector3d(0, 0, 1.2),
+      const Eigen::Vector3d &velocity = Eigen::Vector3d(0, 0, 0),
+      const Eigen::Vector3d &acceleration = Eigen::Vector3d(0, 0, 0),
+      double yaw = 0.0, double yaw_rate = 0.0) {
+
+    mavros_msgs::PositionTarget pos_target;
+
+    // 设置头信息和坐标系
+    pos_target.header.frame_id = "map";
+    pos_target.header.stamp = ros::Time::now();
+
+    // 设置坐标系
+    if (use_body_frame) {
+      pos_target.coordinate_frame = mavros_msgs::PositionTarget::FRAME_BODY_NED;
+    } else {
+      pos_target.coordinate_frame =
+          mavros_msgs::PositionTarget::FRAME_LOCAL_NED;
+    }
+
+    // 默认忽略所有字段
+    uint16_t type_mask = 0;
+
+    // 根据控制模式设置type_mask和对应的值
+    switch (control_mode) {
+    case 0: // 仅位置控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
+                  mavros_msgs::PositionTarget::IGNORE_VY |
+                  mavros_msgs::PositionTarget::IGNORE_VZ |
+                  mavros_msgs::PositionTarget::IGNORE_AFX |
+                  mavros_msgs::PositionTarget::IGNORE_AFY |
+                  mavros_msgs::PositionTarget::IGNORE_AFZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    case 1: // 仅速度控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
+                  mavros_msgs::PositionTarget::IGNORE_PY |
+                  mavros_msgs::PositionTarget::IGNORE_PZ |
+                  mavros_msgs::PositionTarget::IGNORE_AFX |
+                  mavros_msgs::PositionTarget::IGNORE_AFY |
+                  mavros_msgs::PositionTarget::IGNORE_AFZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    case 2: // 仅加速度控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
+                  mavros_msgs::PositionTarget::IGNORE_PY |
+                  mavros_msgs::PositionTarget::IGNORE_PZ |
+                  mavros_msgs::PositionTarget::IGNORE_VX |
+                  mavros_msgs::PositionTarget::IGNORE_VY |
+                  mavros_msgs::PositionTarget::IGNORE_VZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    case 3: // 位置+速度控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_AFX |
+                  mavros_msgs::PositionTarget::IGNORE_AFY |
+                  mavros_msgs::PositionTarget::IGNORE_AFZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    case 4: // 位置+速度+加速度控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    default:
+      ROS_WARN("Unknown control mode: %d, using position control",
+               control_mode);
+      type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
+                  mavros_msgs::PositionTarget::IGNORE_VY |
+                  mavros_msgs::PositionTarget::IGNORE_VZ |
+                  mavros_msgs::PositionTarget::IGNORE_AFX |
+                  mavros_msgs::PositionTarget::IGNORE_AFY |
+                  mavros_msgs::PositionTarget::IGNORE_AFZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+    }
+
+    // 根据yaw_rate是否为0决定是否使用偏航角速率控制
+    if (yaw_rate != 0.0) {
+      type_mask &= ~mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      type_mask |= mavros_msgs::PositionTarget::IGNORE_YAW;
+    }
+
+    pos_target.type_mask = type_mask;
+
+    // 设置位置、速度、加速度和姿态值
+    pos_target.position.x = position.x();
+    pos_target.position.y = position.y();
+    pos_target.position.z = position.z();
+
+    pos_target.velocity.x = velocity.x();
+    pos_target.velocity.y = velocity.y();
+    pos_target.velocity.z = velocity.z();
+
+    pos_target.acceleration_or_force.x = acceleration.x();
+    pos_target.acceleration_or_force.y = acceleration.y();
+    pos_target.acceleration_or_force.z = acceleration.z();
+
+    pos_target.yaw = yaw;
+    pos_target.yaw_rate = yaw_rate;
+
+    // 存储结果
+    default_pos_target_ = pos_target;
+
+    // 输出调试信息
+    ROS_INFO("Initialized position target:");
+    ROS_INFO("  Control mode: %d", control_mode);
+    ROS_INFO("  Coordinate frame: %s",
+             use_body_frame ? "BODY_NED" : "LOCAL_NED");
+    ROS_INFO("  Position: [%.2f, %.2f, %.2f]", position.x(), position.y(),
+             position.z());
+    ROS_INFO("  Velocity: [%.2f, %.2f, %.2f]", velocity.x(), velocity.y(),
+             velocity.z());
+    ROS_INFO("  Acceleration: [%.2f, %.2f, %.2f]", acceleration.x(),
+             acceleration.y(), acceleration.z());
+    ROS_INFO("  Yaw: %.2f rad, Yaw rate: %.2f rad/s", yaw, yaw_rate);
+    ROS_INFO("  Type mask: %d", type_mask);
+  }
+
+  /**
+   * 从PoseStamped转换为PositionTarget，并支持添加速度和加速度信息
+   *
+   * @param pose 位置姿态信息
+   * @param control_mode 控制模式:
+   *     0: 仅位置控制 (x, y, z)
+   *     1: 仅速度控制 (vx, vy, vz)
+   *     2: 仅加速度控制 (afx, afy, afz)
+   *     3: 位置+速度控制
+   *     4: 位置+速度+加速度控制
+   * @param use_body_frame 是否使用机体坐标系
+   * @param velocity 速度设定点 (vx, vy, vz)
+   * @param acceleration 加速度设定点 (afx, afy, afz)
+   * @param yaw 覆盖姿态中的偏航角 (如果不为NaN)
+   * @param yaw_rate 偏航角速率 (弧度/秒)
+   * @return mavros_msgs::PositionTarget 设定点消息
+   */
+  mavros_msgs::PositionTarget poseToPositionTarget(
+      const geometry_msgs::PoseStamped &pose, int control_mode = 4,
+      bool use_body_frame = false,
+      const Eigen::Vector3d &velocity = Eigen::Vector3d(0, 0, 0),
+      const Eigen::Vector3d &acceleration = Eigen::Vector3d(0.0, 0.0, 6.0),
+      double yaw = NAN, double yaw_rate = 0.0) {
+    mavros_msgs::PositionTarget pos_target;
+
+    // 设置头信息
+    pos_target.header = pose.header;
+    pos_target.header.stamp = ros::Time::now();
+
+    // 设置坐标系
+    if (use_body_frame) {
+      pos_target.coordinate_frame = mavros_msgs::PositionTarget::FRAME_BODY_NED;
+    } else {
+      pos_target.coordinate_frame =
+          mavros_msgs::PositionTarget::FRAME_LOCAL_NED;
+    }
+
+    // 设置位置信息
+    pos_target.position.x = pose.pose.position.x;
+    pos_target.position.y = pose.pose.position.y;
+    pos_target.position.z = pose.pose.position.z;
+
+    // 设置速度信息
+    pos_target.velocity.x = velocity.x();
+    pos_target.velocity.y = velocity.y();
+    pos_target.velocity.z = velocity.z();
+
+    // 设置加速度信息
+    pos_target.acceleration_or_force.x = acceleration.x();
+    pos_target.acceleration_or_force.y = acceleration.y();
+    pos_target.acceleration_or_force.z = acceleration.z();
+
+    // 从四元数提取偏航角（如果未提供yaw参数）
+    double extracted_yaw = 0.0;
+    if (std::isnan(yaw)) {
+      tf2::Quaternion q;
+      tf2::fromMsg(pose.pose.orientation, q);
+      double roll, pitch;
+      tf2::Matrix3x3(q).getRPY(roll, pitch, extracted_yaw);
+      pos_target.yaw = extracted_yaw;
+    } else {
+      pos_target.yaw = yaw;
+    }
+
+    // 设置偏航角速率
+    pos_target.yaw_rate = yaw_rate;
+
+    // 根据控制模式设置type_mask
+    uint16_t type_mask = 0;
+
+    switch (control_mode) {
+    case 0: // 仅位置控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
+                  mavros_msgs::PositionTarget::IGNORE_VY |
+                  mavros_msgs::PositionTarget::IGNORE_VZ |
+                  mavros_msgs::PositionTarget::IGNORE_AFX |
+                  mavros_msgs::PositionTarget::IGNORE_AFY |
+                  mavros_msgs::PositionTarget::IGNORE_AFZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    case 1: // 仅速度控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
+                  mavros_msgs::PositionTarget::IGNORE_PY |
+                  mavros_msgs::PositionTarget::IGNORE_PZ |
+                  mavros_msgs::PositionTarget::IGNORE_AFX |
+                  mavros_msgs::PositionTarget::IGNORE_AFY |
+                  mavros_msgs::PositionTarget::IGNORE_AFZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    case 2: // 仅加速度控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
+                  mavros_msgs::PositionTarget::IGNORE_PY |
+                  mavros_msgs::PositionTarget::IGNORE_PZ |
+                  mavros_msgs::PositionTarget::IGNORE_VX |
+                  mavros_msgs::PositionTarget::IGNORE_VY |
+                  mavros_msgs::PositionTarget::IGNORE_VZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    case 3: // 位置+速度控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_AFX |
+                  mavros_msgs::PositionTarget::IGNORE_AFY |
+                  mavros_msgs::PositionTarget::IGNORE_AFZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    case 4: // 位置+速度+加速度控制
+      type_mask = mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      break;
+
+    default:
+      ROS_WARN("Unknown control mode: %d, using position control",
+               control_mode);
+      type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
+                  mavros_msgs::PositionTarget::IGNORE_VY |
+                  mavros_msgs::PositionTarget::IGNORE_VZ |
+                  mavros_msgs::PositionTarget::IGNORE_AFX |
+                  mavros_msgs::PositionTarget::IGNORE_AFY |
+                  mavros_msgs::PositionTarget::IGNORE_AFZ |
+                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+    }
+
+    // 根据yaw_rate是否为0决定是否使用偏航角速率控制
+    if (yaw_rate != 0.0) {
+      type_mask &= ~mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      type_mask |= mavros_msgs::PositionTarget::IGNORE_YAW;
+    }
+
+    pos_target.type_mask = type_mask;
+
+    return pos_target;
   }
 
   // 初始化函数 - 发送一些位置设定点并等待连接
@@ -76,9 +351,12 @@ public:
     ROS_INFO("Sending initial setpoints...");
     for (int i = 300; ros::ok() && i > 0; --i) {
       if (received_pose_) {
-        global_px4_pos_pub_.publish(current_pose_);
+        mavros_msgs::PositionTarget pos_target =
+            poseToPositionTarget(current_pose_);
+        raw_pos_pub_.publish(pos_target);
       } else {
-        global_px4_pos_pub_.publish(default_pose_);
+        default_pos_target_.header.stamp = ros::Time::now();
+        raw_pos_pub_.publish(default_pos_target_);
       }
       ros::spinOnce();
       rate.sleep();
@@ -92,16 +370,23 @@ public:
   void spin() {
     // 确保始终发布位置设定点
     if (received_pose_) {
-      geometry_msgs::PoseStamped pub_pose = current_pose_;
-      pub_pose.header.stamp = ros::Time::now();
-      global_px4_pos_pub_.publish(pub_pose);
+      mavros_msgs::PositionTarget pos_target =
+          poseToPositionTarget(current_pose_);
+      pos_target.header.stamp = ros::Time::now();
+      raw_pos_pub_.publish(pos_target);
+      ROS_INFO("Sending setpoint: [%.2f, %.2f, %.2f]", pos_target.position.x,
+               pos_target.position.y, pos_target.position.z);
     } else {
-      global_px4_pos_pub_.publish(default_pose_);
+      default_pos_target_.header.stamp = ros::Time::now();
+      raw_pos_pub_.publish(default_pos_target_);
+      ROS_INFO("Sending default setpoint: [%.2f, %.2f, %.2f]",
+               default_pos_target_.position.x, default_pos_target_.position.y,
+               default_pos_target_.position.z);
     }
 
     // 按照官方顺序: 先切换模式，成功后再尝试解锁
     if (current_state_.mode != "OFFBOARD" &&
-        (ros::Time::now() - last_request_ > ros::Duration(5.0))) {
+        (ros::Time::now() - last_request_ > ros::Duration(6.0))) {
       // 尝试切换到OFFBOARD模式
       mavros_msgs::SetMode offb_set_mode;
       offb_set_mode.request.custom_mode = "OFFBOARD";
@@ -114,7 +399,7 @@ public:
       }
       last_request_ = ros::Time::now();
     } else if (!current_state_.armed &&
-               (ros::Time::now() - last_request_ > ros::Duration(5.0))) {
+               (ros::Time::now() - last_request_ > ros::Duration(6.0))) {
       // 只有在OFFBOARD模式时才尝试解锁
       mavros_msgs::CommandBool arm_cmd;
       arm_cmd.request.value = true;
@@ -137,15 +422,21 @@ public:
       last_request_ = ros::Time::now();
     }
 
-    // 只有在解锁成功后，才执行导航和坐标变换
+    // 只有在解锁成功后，才执行复杂的导航和坐标变换
     if (current_state_.armed && tf_ready_ && target_is_transformed_) {
       // 发布坐标变换
       static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
 
       // 发布转换后的目标位置
-      global_px4_pos_pub_.publish(transformed_target_);
+      mavros_msgs::PositionTarget target = poseToPositionTarget(
+          transformed_target_, 4, false, Eigen::Vector3d(0, 0, 0),
+          Eigen::Vector3d(0, 0, 2));
+      target.header.stamp = ros::Time::now();
+      raw_pos_pub_.publish(target);
+      ROS_INFO("Sending transformed target: [%.2f, %.2f, %.2f]",
+               target.position.x, target.position.y, target.position.z);
 
-      // 处理位姿更新和导航逻辑
+      // 处理位姿更新和导航
       updatePoseAndNavigation();
     }
   }
@@ -174,7 +465,7 @@ private:
         start_local_body.pose.orientation;
 
     ROS_INFO("Initialized body to world_enu transform");
-    // tf_ready_ = true;
+    tf_ready_ = true;
   }
 
   // 更新位姿和导航
@@ -232,7 +523,7 @@ private:
   }
 
   // 成员变量
-  ros::Publisher global_px4_pos_pub_;
+  ros::Publisher raw_pos_pub_; // 改为发布PositionTarget
   ros::Publisher current_world_body_pos_pub_;
   ros::Subscriber target_pos_sub_;
   ros::Subscriber state_sub_;
@@ -243,7 +534,7 @@ private:
   geometry_msgs::PoseStamped current_pose_;
   geometry_msgs::PoseStamped transformed_target_;
   geometry_msgs::PoseStamped initial_pose_;
-  geometry_msgs::PoseStamped default_pose_; // 默认姿态
+  mavros_msgs::PositionTarget default_pos_target_; // 默认位置目标
   geometry_msgs::TransformStamped world_enu_to_world_body_;
 
   // 状态标志
@@ -279,7 +570,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // 主循环 - 增加频率到50Hz
+  // 主循环 - 频率保持在50Hz
   ros::Rate rate(50.0);
 
   while (ros::ok()) {
