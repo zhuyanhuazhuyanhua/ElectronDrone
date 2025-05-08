@@ -81,7 +81,7 @@ public:
     mavros_msgs::PositionTarget pos_target;
 
     // 设置头信息和坐标系
-    pos_target.header.frame_id = "map";
+    pos_target.header.frame_id = "world_body";
     pos_target.header.stamp = ros::Time::now();
 
     // 设置坐标系
@@ -368,21 +368,6 @@ public:
 
   // 主循环函数 - 按照官方例程的流程
   void spin() {
-    // 确保始终发布位置设定点
-    if (received_pose_) {
-      mavros_msgs::PositionTarget pos_target =
-          poseToPositionTarget(current_pose_);
-      pos_target.header.stamp = ros::Time::now();
-      raw_pos_pub_.publish(pos_target);
-      ROS_INFO("Sending setpoint: [%.2f, %.2f, %.2f]", pos_target.position.x,
-               pos_target.position.y, pos_target.position.z);
-    } else {
-      default_pos_target_.header.stamp = ros::Time::now();
-      raw_pos_pub_.publish(default_pos_target_);
-      ROS_INFO("Sending default setpoint: [%.2f, %.2f, %.2f]",
-               default_pos_target_.position.x, default_pos_target_.position.y,
-               default_pos_target_.position.z);
-    }
 
     // 按照官方顺序: 先切换模式，成功后再尝试解锁
     if (current_state_.mode != "OFFBOARD" &&
@@ -422,22 +407,72 @@ public:
       last_request_ = ros::Time::now();
     }
 
-    // 只有在解锁成功后，才执行复杂的导航和坐标变换
-    if (current_state_.armed && tf_ready_ && target_is_transformed_) {
-      // 发布坐标变换
+    // 始终发布静态变换（如果已初始化）
+    if (tf_ready_) {
       static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
+    }
 
-      // 发布转换后的目标位置
-      mavros_msgs::PositionTarget target = poseToPositionTarget(
-          transformed_target_, 4, false, Eigen::Vector3d(0, 0, 0),
-          Eigen::Vector3d(0, 0, 2));
-      target.header.stamp = ros::Time::now();
-      raw_pos_pub_.publish(target);
-      ROS_INFO("Sending transformed target: [%.2f, %.2f, %.2f]",
-               target.position.x, target.position.y, target.position.z);
+    // ==================== SETPOINT LOGIC ====================
+    // 只发布一次setpoint，按照优先级处理
+
+    mavros_msgs::PositionTarget setpoint;
+    bool setpoint_ready = false;
+
+    // 优先级1: 如果有有效的目标位置，使用它
+    if (current_state_.armed && tf_ready_ && target_is_transformed_) {
+      // 使用转换后的目标位置
+      setpoint = poseToPositionTarget(transformed_target_, 4, false,
+                                      Eigen::Vector3d(0, 0, 0),
+                                      Eigen::Vector3d(0, 0, 2));
+
+      // 打印详细的目标信息
+      ROS_INFO("--------- TARGET COMMAND ---------");
+      ROS_INFO("Frame: %s (coordinate_frame=%d)",
+               transformed_target_.header.frame_id.c_str(),
+               setpoint.coordinate_frame);
+      ROS_INFO("Position: [%.3f, %.3f, %.3f]", setpoint.position.x,
+               setpoint.position.y, setpoint.position.z);
+      ROS_INFO("Velocity: [%.3f, %.3f, %.3f]", setpoint.velocity.x,
+               setpoint.velocity.y, setpoint.velocity.z);
+      ROS_INFO(
+          "Acceleration: [%.3f, %.3f, %.3f]", setpoint.acceleration_or_force.x,
+          setpoint.acceleration_or_force.y, setpoint.acceleration_or_force.z);
+      ROS_INFO("Yaw: %.3f, Yaw rate: %.3f", setpoint.yaw, setpoint.yaw_rate);
+      ROS_INFO("Type mask: %d", setpoint.type_mask);
+      ROS_INFO("---------------------------------");
+
+      setpoint_ready = true;
 
       // 处理位姿更新和导航
       updatePoseAndNavigation();
+    }
+    // 优先级2: 如果没有有效目标，但有当前位置，使用当前位置
+    else if (received_pose_) {
+      setpoint = poseToPositionTarget(current_pose_);
+
+      ROS_INFO("--------- HOLDING POSITION ---------");
+      ROS_INFO("Position: [%.3f, %.3f, %.3f]", setpoint.position.x,
+               setpoint.position.y, setpoint.position.z);
+      ROS_INFO("------------------------------------");
+
+      setpoint_ready = true;
+    }
+    // 优先级3: 如果以上都不可用，使用默认位置目标
+    else {
+      setpoint = default_pos_target_;
+
+      ROS_INFO("--------- DEFAULT POSITION ---------");
+      ROS_INFO("Position: [%.3f, %.3f, %.3f]", setpoint.position.x,
+               setpoint.position.y, setpoint.position.z);
+      ROS_INFO("------------------------------------");
+
+      setpoint_ready = true;
+    }
+
+    // 发布准备好的setpoint（只发布一次）
+    if (setpoint_ready) {
+      setpoint.header.stamp = ros::Time::now();
+      raw_pos_pub_.publish(setpoint);
     }
   }
 
