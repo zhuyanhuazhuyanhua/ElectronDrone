@@ -1,6 +1,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <mavros_msgs/CommandBool.h>
+#include <mavros_msgs/CommandTOL.h>
 #include <mavros_msgs/PositionTarget.h> // 新头文件
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/State.h>
@@ -9,6 +10,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
+
 #include <tf2_ros/transform_listener.h>
 
 #include <Eigen/Dense>
@@ -42,6 +44,8 @@ public:
         nh.serviceClient<mavros_msgs::CommandBool>("mavros/cmd/arming");
     set_mode_client_ =
         nh.serviceClient<mavros_msgs::SetMode>("mavros/set_mode");
+    land_client_ =
+        nh.serviceClient<mavros_msgs::CommandTOL>("/mavros/cmd/land");
     target_pos_sub_ = nh.subscribe<geometry_msgs::PoseStamped>(
         "/target_position", 10,
         std::bind(&mavros_ctrl::target_pos_cb, this, std::placeholders::_1));
@@ -368,6 +372,11 @@ public:
 
   // 主循环函数 - 按照官方例程的流程
   void spin() {
+    // 检查是否降落
+    if (is_grounded_ == true) {
+      ROS_INFO("Vehicle is grounded. Task Finishi!");
+      return;
+    }
 
     // 按照官方顺序: 先切换模式，成功后再尝试解锁
     if (current_state_.mode != "OFFBOARD" &&
@@ -435,6 +444,10 @@ public:
 
       // 打印详细的目标信息
       ROS_INFO("--------- TARGET COMMAND ---------");
+      ROS_INFO("Target Received: [%.3f, %.3f, %.3f]",
+               target_positions_.pose.position.x,
+               target_positions_.pose.position.y,
+               target_positions_.pose.position.z);
       ROS_INFO("Frame: %s (coordinate_frame=%d)",
                transformed_target_.header.frame_id.c_str(),
                setpoint.coordinate_frame);
@@ -447,6 +460,9 @@ public:
           setpoint.acceleration_or_force.y, setpoint.acceleration_or_force.z);
       ROS_INFO("Yaw: %.3f, Yaw rate: %.3f", setpoint.yaw, setpoint.yaw_rate);
       ROS_INFO("Type mask: %d", setpoint.type_mask);
+      ROS_INFO("Current position : [%.3f, %.3f, %.3f]",
+               current_pose_.pose.position.x, current_pose_.pose.position.y,
+               current_pose_.pose.position.z);
       ROS_INFO("---------------------------------");
 
       setpoint_ready = true;
@@ -532,9 +548,44 @@ private:
 
   // 处理目标位置回调
   void target_pos_cb(const geometry_msgs::PoseStamped::ConstPtr &msg) {
-    geometry_msgs::PoseStamped target_positions = *msg;
+    target_positions_ = *msg;
 
-    target_positions.header.frame_id = "world_body"; // 设置坐标系
+    target_positions_.header.frame_id = "world_body"; // 设置坐标系
+
+    // 判断 z 坐标是否小于 -1
+    if (target_positions_.pose.position.z < -0.9) {
+      // 尝试上锁
+
+      // 设置飞行模式为自动降落模式
+      mavros_msgs::SetMode set_mode;
+      set_mode.request.custom_mode = "AUTO.LAND"; // 设置为降落模式
+      if (set_mode_client_.call(set_mode)) {
+        ROS_INFO("成功设置自动降落模式");
+      } else {
+        ROS_ERROR("设置自动降落模式失败");
+      }
+
+      // 发送降落指令
+      mavros_msgs::CommandTOL land_cmd;
+      land_cmd.request.altitude = 0; // 降落到地面
+      if (land_client_.call(land_cmd)) {
+        ROS_INFO("开始降落...");
+      } else {
+        ROS_ERROR("降落命令失败");
+      }
+
+      // 等待无人机降落完成
+      ros::Duration(3.0).sleep(); // 等待一些时间，确保无人机已降落
+
+      // 停桨（解除电机控制）
+      mavros_msgs::CommandBool arm_cmd;
+      arm_cmd.request.value = false; // 停用电机
+      if (arming_client_.call(arm_cmd)) {
+        ROS_INFO("电机已停");
+      } else {
+        ROS_ERROR("停桨命令失败");
+      }
+    }
 
     if (!tf_ready_) {
       ROS_WARN("TF not ready, cannot transform target position");
@@ -544,7 +595,7 @@ private:
 
     // 进行坐标转换
     try {
-      transformed_target_ = tf_buffer_.transform(target_positions, "world_enu",
+      transformed_target_ = tf_buffer_.transform(target_positions_, "world_enu",
                                                  ros::Duration(0.5));
       target_is_transformed_ = true;
     } catch (tf2::TransformException &ex) {
@@ -576,6 +627,7 @@ private:
   ros::Subscriber state_sub_;
   ros::Subscriber px4_pose_sub_;
   ros::ServiceClient arming_client_;
+  ros::ServiceClient land_client_;
   ros::ServiceClient set_mode_client_;
   mavros_msgs::State current_state_;
   geometry_msgs::PoseStamped current_pose_;
@@ -583,11 +635,12 @@ private:
   geometry_msgs::PoseStamped initial_pose_;
   mavros_msgs::PositionTarget default_pos_target_; // 默认位置目标
   geometry_msgs::TransformStamped world_enu_to_world_body_;
-
+  geometry_msgs::PoseStamped target_positions_; // 目标位置
   // 状态标志
   bool received_pose_ = false;
   bool tf_ready_ = false;
   bool target_is_transformed_ = false;
+  bool is_grounded_ = false;
 
   // 时间管理
   ros::Time last_request_ = ros::Time::now();

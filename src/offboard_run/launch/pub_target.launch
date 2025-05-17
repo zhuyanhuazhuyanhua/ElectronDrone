@@ -1,10 +1,12 @@
 <launch>
     <!-- 先加载参数, 不要忘了小数点和逗号，第一个时0.0, 0.0, 0.0，最后一个坐标是终点 -->
     <rosparam param="targetpoints">[0.0, 0.0, 0.8,
+                                    0.0, 0.0, 0.1,
                                     0.0, 0.0, -1.0,                             
                                     ]</rosparam>
 
     <!-- 启动节点 -->
+    <node name="offboard_run_node" pkg="offboard_run" type="offboard_run_node" output="screen"/>
     <node name="target_pub_node" pkg="offboard_run" type="target_pub_node" output="screen"/>
 
 </launch>
