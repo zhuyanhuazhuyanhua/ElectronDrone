@@ -409,7 +409,15 @@ public:
 
     // 始终发布静态变换（如果已初始化）
     if (tf_ready_) {
-      static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
+      geometry_msgs::PoseStamped current_world_body;
+      current_world_body.header.frame_id = "world_body";
+      try {
+        current_world_body = tf_buffer_.transform(current_pose_, "world_body",
+                                                  ros::Duration(0.5));
+        current_world_body_pos_pub_.publish(current_world_body);
+      } catch (tf2::TransformException &ex) {
+        ROS_WARN("Transform local pos failed: %s", ex.what());
+      }
     }
 
     // ==================== SETPOINT LOGIC ====================
@@ -444,7 +452,6 @@ public:
       setpoint_ready = true;
 
       // 处理位姿更新和导航
-      updatePoseAndNavigation();
     }
     // 优先级2: 如果没有有效目标，但有当前位置，使用当前位置
     else if (received_pose_) {
@@ -467,6 +474,11 @@ public:
       ROS_INFO("------------------------------------");
 
       setpoint_ready = true;
+    }
+
+    if (tf_ready_) {
+      // 更新位姿和导航
+      updatePoseAndNavigation();
     }
 
     // 发布准备好的setpoint（只发布一次）
@@ -498,6 +510,7 @@ private:
         start_local_body.pose.position.z;
     world_enu_to_world_body_.transform.rotation =
         start_local_body.pose.orientation;
+    static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
 
     ROS_INFO("Initialized body to world_enu transform");
     tf_ready_ = true;
@@ -521,9 +534,7 @@ private:
   void target_pos_cb(const geometry_msgs::PoseStamped::ConstPtr &msg) {
     geometry_msgs::PoseStamped target_positions = *msg;
 
-    if (target_positions.header.frame_id.empty()) {
-      target_positions.header.frame_id = "world_body"; // 设置默认坐标系
-    }
+    target_positions.header.frame_id = "world_body"; // 设置坐标系
 
     if (!tf_ready_) {
       ROS_WARN("TF not ready, cannot transform target position");
@@ -552,6 +563,7 @@ private:
   // 处理位姿回调
   void px4_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg) {
     current_pose_ = *msg;
+    current_pose_.header.frame_id = "world_enu";
     received_pose_ = true;
     // 更新滑动窗口平均值
     slid_window_avg.addPose(current_pose_);

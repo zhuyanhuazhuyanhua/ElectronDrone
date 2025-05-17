@@ -218,3 +218,9 @@ add_executable(offboard_run_node src/offboard_node.cpp)
 target_link_libraries(offboard_run_node
   ${catkin_LIBRARIES}
 )
+
+add_executable(target_pub_node src/target_pub_node.cpp)
+
+target_link_libraries(target_pub_node
+  ${catkin_LIBRARIES}
+)
