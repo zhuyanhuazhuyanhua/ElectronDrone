@@ -4,8 +4,6 @@
 
 serial::Serial ser;  // 创建串口对象
 
-const size_t frame_length = 64;  // 帧长度
-
 void serialSendCallback(const std_msgs::String::ConstPtr& msg) {
   ROS_INFO("Writing to serial port: %s", msg->data.c_str());
 
@@ -31,8 +29,8 @@ int main(int argc, char** argv) {
 
   ros::Publisher serial_pub =
       nh.advertise<std_msgs::String>("serial_read", 1000);
-  ros::Subscriber serial_sub = nh.subscribe<std_msgs::String>(
-      "/serial_write", 10, serialSendCallback);  // 订阅串口写入消息
+  ros::Subscriber serial_sub =
+      nh.subscribe<std_msgs::String>("/serial_write", 10, serialSendCallback);
 
   try {
     // 配置串口
@@ -57,21 +55,26 @@ int main(int argc, char** argv) {
   ros::Rate loop_rate(100);  // 设置循环频率为100Hz
 
   while (ros::ok()) {
-    // 如果串口缓冲区中至少有一个完整的数据帧
-    if (ser.available() >= frame_length) {
-      // 创建一个缓冲区来存储一帧完整的数据
-      std::vector<uint8_t> frame_data(frame_length * 2);
+    if (ser.available() > 0) {
+      // 读取所有可用的数据
+      std::string data = ser.read(ser.available());
 
-      // 读取完整的一帧数据
-      ser.read(frame_data.data(), frame_length * 2);
-
-      // 将读取的数据转换为字符串以发布
+      // 创建并发布消息
       std_msgs::String msg;
-      msg.data = std::string(frame_data.begin(), frame_data.end());
+      msg.data = data;
 
-      // 打印并发布数据
-      ROS_INFO_STREAM("Read complete frame from serial: " << msg.data);
-      //   serial_pub.publish(msg);
+      // 打印并发布数据 （文本)
+      // ROS_INFO_STREAM("Read data from serial: " << msg.data);
+
+      std::ostringstream hex_stream;
+      hex_stream << std::hex << std::setfill('0');
+      // 打印16进制数据
+      for (unsigned char c : data) {
+        hex_stream << std::setw(2) << static_cast<int>(c) << " ";
+      }
+      ROS_INFO_STREAM("Read complete frame (hex): " << hex_stream.str());
+
+      // serial_pub.publish(msg);
     }
 
     ros::spinOnce();    // 处理回调
