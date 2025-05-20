@@ -1,16 +1,17 @@
 #include <ros/ros.h>
 #include <serial/serial.h>
 #include <std_msgs/String.h>
+#include <uwb_solver.hpp>
 
-serial::Serial ser;  // 创建串口对象
+serial::Serial ser; // 创建串口对象
 
-const size_t frame_length = 64;  // 帧长度
+const size_t frame_length = 64; // 帧长度
 
-void serialSendCallback(const std_msgs::String::ConstPtr& msg) {
+void serialSendCallback(const std_msgs::String::ConstPtr &msg) {
   ROS_INFO("Writing to serial port: %s", msg->data.c_str());
 
   // 将消息写入串口
-  size_t bytes_written = ser.write(msg->data);  // 将消息写入串口
+  size_t bytes_written = ser.write(msg->data); // 将消息写入串口
 
   if (bytes_written == msg->data.length()) {
     ROS_INFO("Successfully written to serial port.");
@@ -19,8 +20,8 @@ void serialSendCallback(const std_msgs::String::ConstPtr& msg) {
   }
 }
 
-int main(int argc, char** argv) {
-  ros::init(argc, argv, "serial_node");  // 初始化ROS节点
+int main(int argc, char **argv) {
+  ros::init(argc, argv, "serial_node"); // 初始化ROS节点
   ros::NodeHandle nh;
 
   // 获取参数（串口配置）
@@ -32,7 +33,7 @@ int main(int argc, char** argv) {
   ros::Publisher serial_pub =
       nh.advertise<std_msgs::String>("serial_read", 1000);
   ros::Subscriber serial_sub = nh.subscribe<std_msgs::String>(
-      "/serial_write", 10, serialSendCallback);  // 订阅串口写入消息
+      "/serial_write", 10, serialSendCallback); // 订阅串口写入消息
 
   try {
     // 配置串口
@@ -40,8 +41,8 @@ int main(int argc, char** argv) {
     ser.setBaudrate(baud_rate);
     serial::Timeout to = serial::Timeout::simpleTimeout(1000);
     ser.setTimeout(to);
-    ser.open();  // 打开串口
-  } catch (serial::IOException& e) {
+    ser.open(); // 打开串口
+  } catch (serial::IOException &e) {
     ROS_ERROR_STREAM("Unable to open port " << port);
     return -1;
   }
@@ -54,7 +55,7 @@ int main(int argc, char** argv) {
   ROS_INFO_STREAM("Serial port " << port << " initialized at " << baud_rate
                                  << " baud");
 
-  ros::Rate loop_rate(100);  // 设置循环频率为100Hz
+  ros::Rate loop_rate(100); // 设置循环频率为100Hz
 
   while (ros::ok()) {
     // 如果串口缓冲区中至少有一个完整的数据帧
@@ -74,10 +75,10 @@ int main(int argc, char** argv) {
       //   serial_pub.publish(msg);
     }
 
-    ros::spinOnce();    // 处理回调
-    loop_rate.sleep();  // 按照设定的频率休眠
+    ros::spinOnce();   // 处理回调
+    loop_rate.sleep(); // 按照设定的频率休眠
   }
 
-  ser.close();  // 关闭串口
+  ser.close(); // 关闭串口
   return 0;
 }
