@@ -41,7 +41,7 @@ public:
                 << std::endl;
       throw std::runtime_error("Matrix A is not invertible");
     }
-    Eigen::Matrix3d A_inverse = A.inverse();
+    A_inverse_ = A.inverse();
 
     // 计算b_tmp
     b_tmp_ << (anchors[1][0] * anchors[1][0] - anchors[0][0] * anchors[0][0] +
@@ -73,7 +73,7 @@ public:
     b(2) -= (distances[3] * distances[3] - distances[0] * distances[0]) / 2.0;
 
     // 计算位置
-    Eigen::Vector3d position = b.transpose() * A_inverse_;
+    Eigen::Vector3d position = A_inverse_ * b;
     return position;
   }
 
