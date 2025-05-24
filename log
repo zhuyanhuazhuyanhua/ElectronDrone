@@ -1,0 +1,28 @@
+[1;33m正在启动热点模式...[0m
+[0;34m已保存当前WiFi连接: BUPT-mobile[0m
+[0;34m========== 尝试 1/3 ==========[0m
+Configuration file: /tmp/hostapd.conf
+Using interface wlan0 with hwaddr 48:8f:4c:fe:7e:c9 and ssid "AAAfly"
+wlan0: Could not connect to kernel driver
+Interface initialization failed
+wlan0: interface state UNINITIALIZED->DISABLED
+wlan0: AP-DISABLED 
+wlan0: Unable to setup interface.
+wlan0: interface state DISABLED->DISABLED
+wlan0: AP-DISABLED 
+wlan0: CTRL-EVENT-TERMINATING 
+hostapd_free_hapd_data: Interface wlan0 wasn't started
+nl80211: deinit ifname=wlan0 disabled_11b_rates=0
+[0;31m热点模式启动失败[0m
+[1;33m等待后重试...[0m
+[1;33m正在停止热点模式...[0m
+[0;32m热点模式已停止[0m
+[0;34m========== 尝试 2/3 ==========[0m
+Configuration file: /tmp/hostapd.conf
+Using interface wlan0 with hwaddr 48:8f:4c:fe:7e:c9 and ssid "AAAfly"
+wlan0: interface state UNINITIALIZED->ENABLED
+wlan0: AP-ENABLED 
+[0;32m热点模式启动成功![0m
+热点名称: AAAfly
+热点密码: 110119120
+热点IP: 192.168.4.1
