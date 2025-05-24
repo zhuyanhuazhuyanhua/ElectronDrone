@@ -12,7 +12,7 @@ Eigen::Quaterniond q_px4_odom;
 geometry_msgs::PoseStamped vision;
 
 class SlidingWindowAverage {
- public:
+public:
   SlidingWindowAverage(int windowSize)
       : windowSize(windowSize), windowSum(0.0) {}
 
@@ -41,7 +41,7 @@ class SlidingWindowAverage {
 
   double get_avg() { return windowAvg_; }
 
- private:
+private:
   int windowSize;
   double windowSum;
   double windowAvg_;
@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
     if (swa.get_size() == windowSize && !init_flag) {
       init_yaw = swa.get_avg();
       init_flag = 1;
-      init_q = Eigen::AngleAxisd(init_yaw, Eigen::Vector3d::UnitZ())  // des.yaw
+      init_q = Eigen::AngleAxisd(init_yaw, Eigen::Vector3d::UnitZ()) // des.yaw
                * Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
                Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
       // delete swa;
@@ -111,19 +111,19 @@ int main(int argc, char **argv) {
       vision.pose.position.y = p_enu[1];
       vision.pose.position.z = p_enu[2];
 
-      vision.pose.orientation.x = q_mav.x();
-      vision.pose.orientation.y = q_mav.y();
-      vision.pose.orientation.z = q_mav.z();
-      vision.pose.orientation.w = q_mav.w();
+      Eigen::Quaterniond q_enu = init_q * q_mav;
+      vision.pose.orientation.x = q_enu.x();
+      vision.pose.orientation.y = q_enu.y();
+      vision.pose.orientation.z = q_enu.z();
+      vision.pose.orientation.w = q_enu.w();
 
       vision_pub.publish(vision);
 
-      ROS_INFO(
-          "\nposition in enu:\n   x: %.18f\n   y: %.18f\n   z: "
-          "%.18f\norientation of lidar:\n   x: %.18f\n   y: %.18f\n   z: "
-          "%.18f\n   w: %.18f",
-          p_enu[0], p_enu[1], p_enu[2], q_mav.x(), q_mav.y(), q_mav.z(),
-          q_mav.w());
+      ROS_INFO("\nposition in enu:\n   x: %.18f\n   y: %.18f\n   z: "
+               "%.18f\norientation of lidar:\n   x: %.18f\n   y: %.18f\n   z: "
+               "%.18f\n   w: %.18f",
+               p_enu[0], p_enu[1], p_enu[2], q_enu.x(), q_enu.y(), q_enu.z(),
+               q_enu.w());
     }
 
     ros::spinOnce();

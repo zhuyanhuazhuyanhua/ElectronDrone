@@ -123,7 +123,7 @@ Eigen::Vector4d parseTagData(const std::vector<uint8_t> &buffer) {
       distances(i) = tagData.Dist[i] / 100.0; // Convert cm to meters
     }
   }
-  std::cout << "Distances" << distances;
+  std::cout << "Distances" << distances.transpose() << std::endl;
 
   ROS_INFO("Tag data parsed: Cal_Flag=0x%04X, Pos=(%d,%d,%d)", tagData.Cal_Flag,
            tagData.x, tagData.y, tagData.z);
@@ -136,15 +136,15 @@ int main(int argc, char **argv) {
   ros::init(argc, argv, "serial_reader");
   ros::NodeHandle nh;
 
-  std::vector<Eigen::Vector3d> Anchors = {{0.0, 0.0, 0.01},    // Anchor 1
-                                          {3.52, 0.0, 0.0},    // Anchor 2
-                                          {2.87, 5.79, 0.0},   // Anchor 3
-                                          {-0.15, 5.21, 0.0}}; // Anchor 4
+  std::vector<Eigen::Vector3d> Anchors = {{0.0, 0.0, 1.605},       // Anchor 1
+                                          {3.588, 0.0027, 1.318},  // Anchor 2
+                                          {3.370, 6.797, 1.930},   // Anchor 3
+                                          {-2.616, 5.569, 1.730}}; // Anchor 4
   uwb_solver uwb_solver(Anchors);
 
   serial::Serial ser;
   try {
-    ser.setPort("/dev/ttyUSB0");
+    ser.setPort("/dev/ttyUSB1");
     ser.setBaudrate(115200);
     serial::Timeout to = serial::Timeout::simpleTimeout(1000);
     ser.setTimeout(to);
@@ -220,7 +220,7 @@ int main(int argc, char **argv) {
             Eigen::Vector3d result;
             try {
               result = uwb_solver.solve(distances);
-              ROS_INFO_STREAM("UWB Solver result: " << result);
+              ROS_INFO_STREAM("UWB Solver result: " << result.transpose());
             } catch (const std::exception &e) {
               ROS_ERROR_STREAM("UWB Solver error: " << e.what());
               continue; // Skip this iteration if there's an error

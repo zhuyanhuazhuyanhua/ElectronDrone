@@ -1,0 +1,1 @@
+/home/bupt/lib_mid360/start360.sh
