@@ -18,7 +18,8 @@ def handle_client(conn, addr):
     try:
         data = conn.recv(1024)  # 接收客户端请求（内容可忽略）
         if data:
-            response = latest_message.encode('utf-8')
+            msg_to_send = latest_message + " 1A"
+            response = msg_to_send.encode('utf-8')
             conn.sendall(response)
     except Exception as e:
         rospy.logwarn(f"Error handling client {addr}: {e}")
@@ -57,7 +58,7 @@ if __name__ == '__main__':
     rospy.init_node('tcp_ros_server')
 
     # 订阅 ROS 字符串话题
-    rospy.Subscriber('/chatter', String, chatter_callback)
+    rospy.Subscriber('/qrcode_content', String, chatter_callback)
 
     # 获取本机 IP 并启动 TCP 服务器
     local_ip = get_local_ip()

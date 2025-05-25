@@ -23,5 +23,5 @@ def tcp_client(server_ip, port=8888):
 
 if __name__ == '__main__':
     # 替换为服务端实际 IP（可从服务端日志或 ifconfig 查看）
-    server_ip = '10.21.190.49'  # ← 修改为你服务端的 IP
+    server_ip = '192.168.0.4'  # ← 修改为你服务端的 IP
     tcp_client(server_ip)
