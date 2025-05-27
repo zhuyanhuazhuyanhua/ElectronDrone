@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 
   serial::Serial ser;
   try {
-    ser.setPort("/dev/ttyUSB1");
+    ser.setPort("/dev/ttyUSB0");
     ser.setBaudrate(115200);
     serial::Timeout to = serial::Timeout::simpleTimeout(1000);
     ser.setTimeout(to);
