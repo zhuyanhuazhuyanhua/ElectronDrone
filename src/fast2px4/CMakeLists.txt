@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(fast2px4)
 
+add_definitions(-DPTHREAD_STACK_MIN=16384)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
@@ -14,6 +15,10 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   roscpp
   rospy
+  tf2
+  tf2_ros
+  tf2_sensor_msgs
+  tf2_geometry_msgs
 )
 
 find_package(Eigen3 REQUIRED)
