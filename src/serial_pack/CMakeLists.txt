@@ -199,6 +199,7 @@ target_link_libraries(serial_node
 
 install(PROGRAMS
   scripts/ctrl_gpio.py
+  scripts/servo.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

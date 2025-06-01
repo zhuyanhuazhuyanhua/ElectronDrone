@@ -4,7 +4,7 @@ from std_msgs.msg import Bool
 import RPi.GPIO as GPIO
 
 # Pin Definitions
-OUTPUT_PIN = 18  # BCM pin 18, BOARD pin 12
+OUTPUT_PIN = 19  # BCM pin 
 
 class GPIORosController:
     def __init__(self):
