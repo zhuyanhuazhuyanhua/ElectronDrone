@@ -4,7 +4,9 @@
 
 #include <array>
 #include <cstdint>
+#include <iomanip>
 #include <memory>
+#include <sstream>
 #include <vector>
 
 #include "ros/console.h"
@@ -13,21 +15,36 @@
 #include "ros/subscriber.h"
 #include "serial_pack/setIO.h"
 
-const static uint8_t CMD_SET_IO_SINGLE = 0x01;  // 设置IO命令
-const static uint8_t CMD_SET_SERVO = 's';       // 设置舵机命令
+const static uint8_t CMD_INIT_IO = 0x01;       // 设置IO命令
+const static uint8_t CMD_SET_IO_SINGLE = 0x02; // 设置IO命令
+const static uint8_t CMD_SET_SERVO = 's';      // 设置舵机命令
 const static uint8_t CMD_INIT_PWM_GROUP = 0x21;
-const static uint8_t CMD_SET_PWM_DUTY = 0x22;           // 设置PWM命令
-const static uint8_t CMD_SET_PWM_GROUPE_ENABLE = 0x23;  // 设置PWM组使能命令
-const static uint8_t CMD_SET_PWM_GLOBAL_ENABLE = 0x24;  // 设置全局PWM使能命令
+const static uint8_t CMD_SET_PWM_DUTY = 0x22;          // 设置PWM命令
+const static uint8_t CMD_SET_PWM_GROUPE_ENABLE = 0x23; // 设置PWM组使能命令
+const static uint8_t CMD_SET_PWM_GLOBAL_ENABLE = 0x24; // 设置全局PWM使能命令
+
+// 辅助函数：将字节数组转换为16进制字符串用于打印
+std::string bytesToHexString(const std::vector<uint8_t> &data) {
+  std::stringstream ss;
+  ss << "0x";
+  for (size_t i = 0; i < data.size(); ++i) {
+    ss << std::hex << std::setw(2) << std::setfill('0')
+       << static_cast<int>(data[i]);
+    if (i < data.size() - 1) {
+      ss << " 0x";
+    }
+  }
+  return ss.str();
+}
 
 class IO {
- public:
+public:
   enum MODE {
-    INPUT_FLOAT = 0,        //浮空输入
-    INPUT_LOW = 1,          // 下拉输入
-    INPUT_HIGH = 2,         // 上拉输入
-    OUTPUT_OPEN_DRAIN = 3,  // 开漏输出
-    OUTPUT_PUSH_PULL = 4,   // 推挽输出
+    INPUT_FLOAT = 1,       //浮空输入
+    INPUT_LOW = 2,         // 下拉输入
+    INPUT_HIGH = 3,        // 上拉输入
+    OUTPUT_OPEN_DRAIN = 4, // 开漏输出
+    OUTPUT_PUSH_PULL = 5,  // 推挽输出
   };
 
   IO(std::shared_ptr<serial::Serial> serial_ptr, const uint8_t &pin,
@@ -57,12 +74,18 @@ class IO {
 
     try {
       std::vector<uint8_t> packet;
-      packet.push_back(CMD_SET_IO_SINGLE);
+      packet.push_back(CMD_INIT_IO);
 
-      std::array<uint8_t, 3> data = getIOData();
+      std::array<uint8_t, 3> data = getIOInitData();
       packet.insert(packet.end(), data.begin(), data.end());
 
-      ser_ptr_->write(packet);
+      // 打印发送的16进制数据
+      ROS_INFO("Sending IO init data: %s", bytesToHexString(packet).c_str());
+
+      size_t bytes_written = ser_ptr_->write(packet);
+      ser_ptr_->flush(); // 强制刷新缓冲区
+
+      ROS_INFO("IO init: wrote %zu bytes", bytes_written);
       ROS_INFO("IO pin %d initialized", pin_);
       return true;
     } catch (serial::IOException &e) {
@@ -88,12 +111,19 @@ class IO {
 
     try {
       std::vector<uint8_t> packet;
+
       packet.push_back(CMD_SET_IO_SINGLE);
+      packet.push_back(static_cast<uint8_t>(pin_));
+      packet.push_back(static_cast<uint8_t>(level));
 
-      std::array<uint8_t, 3> data = getIOData();
-      packet.insert(packet.end(), data.begin(), data.end());
+      // 打印发送的16进制数据
+      ROS_INFO("Sending IO setLevel data: %s",
+               bytesToHexString(packet).c_str());
 
-      ser_ptr_->write(packet);
+      size_t bytes_written = ser_ptr_->write(packet);
+      ser_ptr_->flush(); // 强制刷新缓冲区
+
+      ROS_INFO("SetLevel: wrote %zu bytes", bytes_written);
       ROS_INFO("Pin %u set to %s", pin_, level ? "HIGH" : "LOW");
       return true;
     } catch (serial::IOException &e) {
@@ -102,7 +132,7 @@ class IO {
     }
   }
 
-  std::array<uint8_t, 3> getIOData() const {
+  std::array<uint8_t, 3> getIOInitData() const {
     std::array<uint8_t, 3> data = {pin_, static_cast<uint8_t>(mode_), level_};
     return data;
   }
@@ -111,15 +141,15 @@ class IO {
   MODE getIOmode() const { return mode_; }
   uint8_t getPin() const { return pin_; }
 
- private:
+private:
   MODE mode_;
   uint8_t pin_;
-  uint8_t level_;  // 仅在输出模式下有效
+  uint8_t level_; // 仅在输出模式下有效
   std::shared_ptr<serial::Serial> ser_ptr_;
 };
 
 class ServoController {
- public:
+public:
   ServoController(std::shared_ptr<serial::Serial> serial_ptr = nullptr)
       : ser_ptr_(serial_ptr) {}
 
@@ -142,7 +172,14 @@ class ServoController {
 
     try {
       std::vector<uint8_t> packet{CMD_SET_SERVO, angle};
-      ser_ptr_->write(packet);
+
+      // 打印发送的16进制数据
+      ROS_INFO("Sending servo data: %s", bytesToHexString(packet).c_str());
+
+      size_t bytes_written = ser_ptr_->write(packet);
+      ser_ptr_->flush(); // 强制刷新缓冲区
+
+      ROS_INFO("Servo: wrote %zu bytes", bytes_written);
       ROS_INFO("Servo set to angle %d", angle);
       return true;
     } catch (serial::IOException &e) {
@@ -151,12 +188,12 @@ class ServoController {
     }
   }
 
- private:
+private:
   std::shared_ptr<serial::Serial> ser_ptr_;
 };
 
 class PWM {
- public:
+public:
   // 设置PWM使能状态
   void setCountValue(const u_int16_t &countValue) { count_value_ = countValue; }
   void setPolarityHigh(const bool &polarity) { polarity_ = polarity; }
@@ -164,21 +201,21 @@ class PWM {
   u_int16_t getCountValue() const { return count_value_; }
   bool getPolarityHigh() const { return polarity_; }
 
- private:
-  bool polarity_ = false;      // 奇偶校验位
-  u_int16_t count_value_ = 0;  // PWM占空比计数
+private:
+  bool polarity_ = false;
+  u_int16_t count_value_ = 0; // PWM占空比计数
 };
 
 class PWMGroups {
- public:
+public:
   PWMGroups(const u_int16_t &resolution_us, const u_int16_t &cycle_us) {
     if (resolution_us == 0 || resolution_us > 546) {
       ROS_ERROR("Invalid resolution: %d us. Must be between 1 and 546 us.",
                 resolution_us);
       return;
     }
-    resolution_ = 120 * resolution_us;        // 分辨率，单位us 120是1us
-    count_value_ = cycle_us / resolution_us;  // PWM计数周期
+    resolution_ = 120 * resolution_us;       // 分辨率，单位us 120是1us
+    count_value_ = cycle_us / resolution_us; // PWM计数周期
   }
 
   void setPWMDuty(const uint8_t &id, const double &duty) {
@@ -210,20 +247,20 @@ class PWMGroups {
     ROS_INFO("Set PWM group %d polarity to %s", id, polarity ? "HIGH" : "LOW");
   }
 
- private:
-  std::array<PWM, 4> pwm_groups_;  // 4路PWM
+private:
+  std::array<PWM, 4> pwm_groups_; // 4路PWM
   u_int16_t resolution_;
-  u_int32_t count_value_ = 10000;  // PWM计数周期
-  bool enable_ = false;            // PWM使能状态
+  u_int32_t count_value_ = 10000; // PWM计数周期
+  bool enable_ = false;           // PWM使能状态
 
   std::array<uint8_t, 9> getInitCMD(const uint8_t &group_id) const {
     uint8_t Px = 0;
     for (int i = 0; i < 4; ++i) {
-      int d = pwm_groups_[i].getPolarityHigh();  // 获取极性
+      int d = pwm_groups_[i].getPolarityHigh(); // 获取极性
       if (d) {
-        Px |= (1 << (i + 4));  // 将极性位设置到Px中
+        Px |= (1 << (i + 4)); // 将极性位设置到Px中
       } else {
-        Px |= (1 << i);  // 将极性位设置到Px中
+        Px |= (1 << i); // 将极性位设置到Px中
       }
     }
     std::array<uint8_t, 9> init_cmd = {
@@ -270,7 +307,7 @@ void IO_cb(const serial_pack::setIO::ConstPtr msg) {
     return;
   }
 
-  io_list[msg->pin].setLevel(msg->level);
+  io_list[msg->pin - 1].setLevel(msg->level);
 }
 
 void servo_cb(const std_msgs::Int8::ConstPtr msg) {
@@ -285,19 +322,26 @@ int main(int argc, char **argv) {
   ros::init(argc, argv, "io_extra_server");
   ros::NodeHandle nh("~");
 
-  // 初始化串口
-  ser_ptr = std::make_shared<serial::Serial>();
+  // 获取串口参数
+  std::string port =
+      nh.param<std::string>("port", "/dev/ttyACM0"); // 修改默认端口
+  int baudrate = nh.param<int>("baudrate", 115200);
+
+  ROS_INFO("Initializing serial port: %s at %d baud", port.c_str(), baudrate);
 
   try {
-    ser_ptr->setPort(nh.param<std::string>("port", "/dev/ttyUSB0"));
-    ser_ptr->setBaudrate(nh.param<int>("baudrate", 115200));
-    ser_ptr->open();
+    // 使用构造函数直接创建并打开串口
+    ser_ptr = std::make_shared<serial::Serial>(
+        port, baudrate, serial::Timeout::simpleTimeout(1000));
 
     if (!ser_ptr->isOpen()) {
-      ROS_ERROR("Failed to open serial port.");
+      ROS_ERROR("Failed to open serial port: %s", port.c_str());
       return 1;
     }
-    ROS_INFO("Serial port opened.");
+
+    ROS_INFO("Serial port opened successfully: %s at %d baud",
+             ser_ptr->getPort().c_str(), ser_ptr->getBaudrate());
+
   } catch (serial::IOException &e) {
     ROS_ERROR("Serial exception: %s", e.what());
     return 1;
@@ -307,13 +351,14 @@ int main(int argc, char **argv) {
   servo_controller = std::make_shared<ServoController>(ser_ptr);
 
   // 初始化IO引脚
-  for (int i = 0; i < 16; ++i) {
+  for (int i = 1; i <= 16; ++i) {
     std::string mode_param = "io" + std::to_string(i) + "_mode";
     std::string level_param = "io" + std::to_string(i) + "_level";
 
-    int mode_val = 4;  // 默认模式为 OUTPUT_PUSH_PULL
+    int mode_val = 5; // 默认模式为 OUTPUT_PUSH_PULL
     int level_val = 0;
 
+    ROS_INFO("Initializing IO pin %d", i);
     // 尝试从参数服务器读取参数，若失败则警告
     if (!nh.getParam(mode_param, mode_val)) {
       ROS_WARN("Parameter [%s] not found. Using default OUTPUT_PUSH_PULL.",
@@ -324,7 +369,7 @@ int main(int argc, char **argv) {
                level_param.c_str());
     }
 
-    if (mode_val < 0 || mode_val > 4) {
+    if (mode_val < 1 || mode_val > 5) {
       ROS_ERROR("Invalid mode [%d] for pin %d. Skipping this IO.", mode_val, i);
       continue;
     }
@@ -344,7 +389,7 @@ int main(int argc, char **argv) {
 
   // 订阅话题
   ros::Subscriber io_suber =
-      nh.subscribe<serial_pack::setIO>("/setIO", 1, IO_cb);
+      nh.subscribe<serial_pack::setIO>("/setIO", 10, IO_cb);
   ros::Subscriber servo_suber =
       nh.subscribe<std_msgs::Int8>("/set_servo", 1, servo_cb);
 

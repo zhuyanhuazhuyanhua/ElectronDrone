@@ -1,49 +1,64 @@
 <launch>
-  <arg name="port" default="/dev/ttyUSB1" />
+  <!-- 串口参数 -->
+  <arg name="port" default="/dev/ttyACM0" />
   <arg name="baudrate" default="115200" />
 
-  <!-- 统一设置所有IO为 推挽输出(4)，低电平(0) -->
-  <arg name="io0_mode" default="4" />
-  <arg name="io0_level" default="0" />
-  <arg name="io1_mode" default="4" />
+  <!-- 统一设置所有IO为 推挽输出(5)，低电平(0) -->
+  <arg name="io1_mode" default="5" />
   <arg name="io1_level" default="0" />
-  <arg name="io2_mode" default="4" />
+  <arg name="io2_mode" default="5" />
   <arg name="io2_level" default="0" />
-  <arg name="io3_mode" default="4" />
+  <arg name="io3_mode" default="5" />
   <arg name="io3_level" default="0" />
-  <arg name="io4_mode" default="4" />
+  <arg name="io4_mode" default="5" />
   <arg name="io4_level" default="0" />
-  <arg name="io5_mode" default="4" />
+  <arg name="io5_mode" default="5" />
   <arg name="io5_level" default="0" />
-  <arg name="io6_mode" default="4" />
+  <arg name="io6_mode" default="5" />
   <arg name="io6_level" default="0" />
-  <arg name="io7_mode" default="4" />
+  <arg name="io7_mode" default="5" />
   <arg name="io7_level" default="0" />
-  <arg name="io8_mode" default="4" />
+  <arg name="io8_mode" default="5" />
   <arg name="io8_level" default="0" />
-  <arg name="io9_mode" default="4" />
+  <arg name="io9_mode" default="5" />
   <arg name="io9_level" default="0" />
-  <arg name="io10_mode" default="4" />
+  <arg name="io10_mode" default="5" />
   <arg name="io10_level" default="0" />
-  <arg name="io11_mode" default="4" />
+  <arg name="io11_mode" default="5" />
   <arg name="io11_level" default="0" />
-  <arg name="io12_mode" default="4" />
+  <arg name="io12_mode" default="5" />
   <arg name="io12_level" default="0" />
-  <arg name="io13_mode" default="4" />
+  <arg name="io13_mode" default="5" />
   <arg name="io13_level" default="0" />
-  <arg name="io14_mode" default="4" />
+  <arg name="io14_mode" default="5" />
   <arg name="io14_level" default="0" />
-  <arg name="io15_mode" default="4" />
+  <arg name="io15_mode" default="5" />
   <arg name="io15_level" default="0" />
+  <arg name="io16_mode" default="5" />
+  <arg name="io16_level" default="0" />
+
+  <!-- PWM组1参数 -->
+  <arg name="pwm1_resolution" default="10" />     <!-- 分辨率，单位us -->
+  <arg name="pwm1_cycle_time" default="20000" />  <!-- 周期时间，单位us (20ms for servo) -->
+  <arg name="pwm1_polarity" default="true" />     <!-- 极性，true=高电平有效 -->
+
+  <!-- PWM组2参数 -->
+  <arg name="pwm2_resolution" default="10" />     <!-- 分辨率，单位us -->
+  <arg name="pwm2_cycle_time" default="20000" />  <!-- 周期时间，单位us -->
+  <arg name="pwm2_polarity" default="true" />     <!-- 极性，true=高电平有效 -->
+
+  <!-- PWM组3参数 -->
+  <arg name="pwm3_resolution" default="10" />     <!-- 分辨率，单位us -->
+  <arg name="pwm3_cycle_time" default="20000" />  <!-- 周期时间，单位us -->
+  <arg name="pwm3_polarity" default="true" />     <!-- 极性，true=高电平有效 -->
 
   <!-- 启动节点 -->
   <node name="io_extra_server" pkg="serial_pack" type="io_extra_server" output="screen">
+    <!-- 串口配置 -->
     <param name="port" value="$(arg port)" />
     <param name="baudrate" value="$(arg baudrate)" />
 
     <!-- 所有 IO 配置 -->
-    <param name="io0_mode" value="$(arg io0_mode)" />
-    <param name="io0_level" value="$(arg io0_level)" />
     <param name="io1_mode" value="$(arg io1_mode)" />
     <param name="io1_level" value="$(arg io1_level)" />
     <param name="io2_mode" value="$(arg io2_mode)" />
@@ -74,5 +89,22 @@
     <param name="io14_level" value="$(arg io14_level)" />
     <param name="io15_mode" value="$(arg io15_mode)" />
     <param name="io15_level" value="$(arg io15_level)" />
+    <param name="io16_mode" value="$(arg io16_mode)" />
+    <param name="io16_level" value="$(arg io16_level)" />
+
+    <!-- PWM组1配置 -->
+    <param name="pwm1_resolution" value="$(arg pwm1_resolution)" />
+    <param name="pwm1_cycle_time" value="$(arg pwm1_cycle_time)" />
+    <param name="pwm1_polarity" value="$(arg pwm1_polarity)" />
+
+    <!-- PWM组2配置 -->
+    <param name="pwm2_resolution" value="$(arg pwm2_resolution)" />
+    <param name="pwm2_cycle_time" value="$(arg pwm2_cycle_time)" />
+    <param name="pwm2_polarity" value="$(arg pwm2_polarity)" />
+
+    <!-- PWM组3配置 -->
+    <param name="pwm3_resolution" value="$(arg pwm3_resolution)" />
+    <param name="pwm3_cycle_time" value="$(arg pwm3_cycle_time)" />
+    <param name="pwm3_polarity" value="$(arg pwm3_polarity)" />
   </node>
 </launch>
