@@ -55,6 +55,7 @@ find_package(Eigen3 REQUIRED)
 add_message_files(
   FILES
   setIO.msg
+  setPWM.msg
 )
 
 ## Generate services in the 'srv' folder

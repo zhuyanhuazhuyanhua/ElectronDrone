@@ -38,18 +38,18 @@
   <arg name="io16_level" default="0" />
 
   <!-- PWM组1参数 -->
-  <arg name="pwm1_resolution" default="10" />     <!-- 分辨率，单位us -->
-  <arg name="pwm1_cycle_time" default="20000" />  <!-- 周期时间，单位us (20ms for servo) -->
+  <arg name="pwm1_resolution" default="1" />     <!-- 分辨率，单位us -->
+  <arg name="pwm1_cycle_time" default="10000" />  <!-- 周期时间，单位us  -->
   <arg name="pwm1_polarity" default="true" />     <!-- 极性，true=高电平有效 -->
 
   <!-- PWM组2参数 -->
-  <arg name="pwm2_resolution" default="10" />     <!-- 分辨率，单位us -->
-  <arg name="pwm2_cycle_time" default="20000" />  <!-- 周期时间，单位us -->
+  <arg name="pwm2_resolution" default="1" />     <!-- 分辨率，单位us -->
+  <arg name="pwm2_cycle_time" default="10000" />  <!-- 周期时间，单位us -->
   <arg name="pwm2_polarity" default="true" />     <!-- 极性，true=高电平有效 -->
 
   <!-- PWM组3参数 -->
-  <arg name="pwm3_resolution" default="10" />     <!-- 分辨率，单位us -->
-  <arg name="pwm3_cycle_time" default="20000" />  <!-- 周期时间，单位us -->
+  <arg name="pwm3_resolution" default="1" />     <!-- 分辨率，单位us -->
+  <arg name="pwm3_cycle_time" default="10000" />  <!-- 周期时间，单位us -->
   <arg name="pwm3_polarity" default="true" />     <!-- 极性，true=高电平有效 -->
 
   <!-- 启动节点 -->
