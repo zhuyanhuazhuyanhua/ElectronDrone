@@ -1,0 +1,78 @@
+<launch>
+  <arg name="port" default="/dev/ttyUSB1" />
+  <arg name="baudrate" default="115200" />
+
+  <!-- 统一设置所有IO为 推挽输出(4)，低电平(0) -->
+  <arg name="io0_mode" default="4" />
+  <arg name="io0_level" default="0" />
+  <arg name="io1_mode" default="4" />
+  <arg name="io1_level" default="0" />
+  <arg name="io2_mode" default="4" />
+  <arg name="io2_level" default="0" />
+  <arg name="io3_mode" default="4" />
+  <arg name="io3_level" default="0" />
+  <arg name="io4_mode" default="4" />
+  <arg name="io4_level" default="0" />
+  <arg name="io5_mode" default="4" />
+  <arg name="io5_level" default="0" />
+  <arg name="io6_mode" default="4" />
+  <arg name="io6_level" default="0" />
+  <arg name="io7_mode" default="4" />
+  <arg name="io7_level" default="0" />
+  <arg name="io8_mode" default="4" />
+  <arg name="io8_level" default="0" />
+  <arg name="io9_mode" default="4" />
+  <arg name="io9_level" default="0" />
+  <arg name="io10_mode" default="4" />
+  <arg name="io10_level" default="0" />
+  <arg name="io11_mode" default="4" />
+  <arg name="io11_level" default="0" />
+  <arg name="io12_mode" default="4" />
+  <arg name="io12_level" default="0" />
+  <arg name="io13_mode" default="4" />
+  <arg name="io13_level" default="0" />
+  <arg name="io14_mode" default="4" />
+  <arg name="io14_level" default="0" />
+  <arg name="io15_mode" default="4" />
+  <arg name="io15_level" default="0" />
+
+  <!-- 启动节点 -->
+  <node name="io_extra_server" pkg="serial_pack" type="io_extra_server" output="screen">
+    <param name="port" value="$(arg port)" />
+    <param name="baudrate" value="$(arg baudrate)" />
+
+    <!-- 所有 IO 配置 -->
+    <param name="io0_mode" value="$(arg io0_mode)" />
+    <param name="io0_level" value="$(arg io0_level)" />
+    <param name="io1_mode" value="$(arg io1_mode)" />
+    <param name="io1_level" value="$(arg io1_level)" />
+    <param name="io2_mode" value="$(arg io2_mode)" />
+    <param name="io2_level" value="$(arg io2_level)" />
+    <param name="io3_mode" value="$(arg io3_mode)" />
+    <param name="io3_level" value="$(arg io3_level)" />
+    <param name="io4_mode" value="$(arg io4_mode)" />
+    <param name="io4_level" value="$(arg io4_level)" />
+    <param name="io5_mode" value="$(arg io5_mode)" />
+    <param name="io5_level" value="$(arg io5_level)" />
+    <param name="io6_mode" value="$(arg io6_mode)" />
+    <param name="io6_level" value="$(arg io6_level)" />
+    <param name="io7_mode" value="$(arg io7_mode)" />
+    <param name="io7_level" value="$(arg io7_level)" />
+    <param name="io8_mode" value="$(arg io8_mode)" />
+    <param name="io8_level" value="$(arg io8_level)" />
+    <param name="io9_mode" value="$(arg io9_mode)" />
+    <param name="io9_level" value="$(arg io9_level)" />
+    <param name="io10_mode" value="$(arg io10_mode)" />
+    <param name="io10_level" value="$(arg io10_level)" />
+    <param name="io11_mode" value="$(arg io11_mode)" />
+    <param name="io11_level" value="$(arg io11_level)" />
+    <param name="io12_mode" value="$(arg io12_mode)" />
+    <param name="io12_level" value="$(arg io12_level)" />
+    <param name="io13_mode" value="$(arg io13_mode)" />
+    <param name="io13_level" value="$(arg io13_level)" />
+    <param name="io14_mode" value="$(arg io14_mode)" />
+    <param name="io14_level" value="$(arg io14_level)" />
+    <param name="io15_mode" value="$(arg io15_mode)" />
+    <param name="io15_level" value="$(arg io15_level)" />
+  </node>
+</launch>

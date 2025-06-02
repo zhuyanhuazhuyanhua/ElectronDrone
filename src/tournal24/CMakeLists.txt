@@ -9,7 +9,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-set(OpenCV_DIR /usr/lib/aarch64-linux-gnu/cmake/opencv4/)
+# set(OpenCV_DIR /usr/lib/aarch64-linux-gnu/cmake/opencv4/)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+  set(OpenCV_DIR "/usr/lib/aarch64-linux-gnu/cmake/opencv4/")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+  set(OpenCV_DIR "/usr/lib/x86_64-linux-gnu/cmake/opencv4/")
+else()
+  message(WARNING "Unknown architecture: ${CMAKE_SYSTEM_PROCESSOR}. Please set OpenCV_DIR manually.")
+endif()
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
@@ -110,10 +118,10 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES tournal24
-#  CATKIN_DEPENDS roscpp rospy std_msgs std_srvs
-#  DEPENDS system_lib
+  #  INCLUDE_DIRS include
+  #  LIBRARIES tournal24
+  #  CATKIN_DEPENDS roscpp rospy std_msgs std_srvs
+  #  DEPENDS system_lib
 )
 
 ###########
@@ -154,7 +162,7 @@ add_executable(ctrl src/ctrl.cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(ctrl
-  ${catkin_LIBRARIES} 
+  ${catkin_LIBRARIES}
   # ${OpenCv_LIBS}
 )
 
