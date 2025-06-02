@@ -18,7 +18,6 @@
 
 const static uint8_t CMD_INIT_IO = 0x01;       // 设置IO命令
 const static uint8_t CMD_SET_IO_SINGLE = 0x02; // 设置IO命令
-const static uint8_t CMD_SET_SERVO = 's';      // 设置舵机命令
 const static uint8_t CMD_INIT_PWM_GROUP = 0x21;
 const static uint8_t CMD_SET_PWM_DUTY = 0x22;          // 设置PWM命令
 const static uint8_t CMD_SET_PWM_GROUPE_ENABLE = 0x23; // 设置PWM组使能命令
@@ -146,50 +145,6 @@ private:
   MODE mode_;
   uint8_t pin_;
   uint8_t level_; // 仅在输出模式下有效
-  std::shared_ptr<serial::Serial> ser_ptr_;
-};
-
-class ServoController {
-public:
-  ServoController(std::shared_ptr<serial::Serial> serial_ptr = nullptr)
-      : ser_ptr_(serial_ptr) {}
-
-  // 设置串口指针
-  void setSerialPtr(std::shared_ptr<serial::Serial> serial_ptr) {
-    ser_ptr_ = serial_ptr;
-  }
-
-  // 设置舵机角度
-  bool setAngle(const uint8_t &angle) {
-    if (angle > 180) {
-      ROS_ERROR("Angle %d is out of range (0-180).", angle);
-      return false;
-    }
-
-    if (!ser_ptr_ || !ser_ptr_->isOpen()) {
-      ROS_ERROR("Serial port not available for servo control");
-      return false;
-    }
-
-    try {
-      std::vector<uint8_t> packet{CMD_SET_SERVO, angle};
-
-      // 打印发送的16进制数据
-      ROS_INFO("Sending servo data: %s", bytesToHexString(packet).c_str());
-
-      size_t bytes_written = ser_ptr_->write(packet);
-      ser_ptr_->flush(); // 强制刷新缓冲区
-
-      ROS_INFO("Servo: wrote %zu bytes", bytes_written);
-      ROS_INFO("Servo set to angle %d", angle);
-      return true;
-    } catch (serial::IOException &e) {
-      ROS_ERROR("Serial exception when controlling servo: %s", e.what());
-      return false;
-    }
-  }
-
-private:
   std::shared_ptr<serial::Serial> ser_ptr_;
 };
 
@@ -456,7 +411,6 @@ private:
 
 // 全局变量
 std::vector<IO> io_list;
-std::shared_ptr<ServoController> servo_controller;
 std::shared_ptr<serial::Serial> ser_ptr;
 std::vector<std::shared_ptr<PWMGroups>> pwm_groups_list; // PWM组列表
 
@@ -467,14 +421,6 @@ void IO_cb(const serial_pack::setIO::ConstPtr msg) {
   }
 
   io_list[msg->pin - 1].setLevel(msg->level);
-}
-
-void servo_cb(const std_msgs::Int8::ConstPtr msg) {
-  if (servo_controller) {
-    servo_controller->setAngle(msg->data);
-  } else {
-    ROS_ERROR("Servo controller not initialized");
-  }
 }
 
 // PWM控制回调函数 - 使用自定义setPWM消息
@@ -543,9 +489,6 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // 初始化舵机控制器
-  servo_controller = std::make_shared<ServoController>(ser_ptr);
-
   // 初始化PWM组
   ROS_INFO("Initializing PWM groups...");
   ROS_INFO("PWM Clock: 120MHz, Resolution calculation: resolution_us * 120");
@@ -584,8 +527,8 @@ int main(int argc, char **argv) {
         ROS_ERROR("Failed to initialize PWM group %d", i);
       } else {
         // 如果launch文件指定不使能，则发送禁用命令
-        if (enable) {
-          pwm_group->enablePWM(true);
+        if (!enable) {
+          pwm_group->enablePWM(false);
         }
 
         pwm_groups_list.push_back(pwm_group);
@@ -637,8 +580,6 @@ int main(int argc, char **argv) {
   // 订阅话题
   ros::Subscriber io_suber =
       nh.subscribe<serial_pack::setIO>("/setIO", 10, IO_cb);
-  ros::Subscriber servo_suber =
-      nh.subscribe<std_msgs::Int8>("/set_servo", 1, servo_cb);
 
   // PWM控制订阅者
   ros::Subscriber pwm_suber =
