@@ -126,8 +126,10 @@ public:
     mavros_odom_sub_ =
         nh_.subscribe("/mavros/local_position/odom", 10,
                       &SlamToMavrosConverter::mavrosOdomCallback, this);
+    // slam_odom_sub_ = nh_.subscribe(
+    //     "/Odometry", 10, &SlamToMavrosConverter::slamOdomCallback, this);
     slam_odom_sub_ = nh_.subscribe(
-        "/Odometry", 10, &SlamToMavrosConverter::slamOdomCallback, this);
+        "/imu_propogate", 10, &SlamToMavrosConverter::slamOdomCallback, this);
 
     // 发布话题
     vision_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>(

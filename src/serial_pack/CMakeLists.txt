@@ -141,7 +141,6 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(serial_node src/serial_node.cpp)
 add_executable(io_extra_server src/io_extra_server.cpp)
-add_executable(testserial src/testSerial.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -161,9 +160,6 @@ target_link_libraries(io_extra_server
   ${catkin_LIBRARIES}
 )
 
-target_link_libraries(testserial
-  ${catkin_LIBRARIES}
-)
 #############
 ## Install ##
 #############
