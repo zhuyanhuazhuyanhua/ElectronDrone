@@ -125,7 +125,7 @@ public:
     // 订阅话题
     mavros_odom_sub_ =
         nh_.subscribe("/mavros/local_position/odom", 10,
-                      &SlamToMavrosConverter::mavrosOdomCallback, this);
+                      &SlamToMavrosConverter::mavrosOdomCallback, this, ros::TransportHints().tcpNoDelay());
     // slam_odom_sub_ = nh_.subscribe(
     //     "/Odometry", 10, &SlamToMavrosConverter::slamOdomCallback, this);
     slam_odom_sub_ = nh_.subscribe(

@@ -2,7 +2,7 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <mavros_msgs/CommandBool.h>
 #include <mavros_msgs/CommandTOL.h>
-#include <mavros_msgs/PositionTarget.h> // 新头文件
+#include <mavros_msgs/PositionTarget.h>  // 新头文件
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/State.h>
 #include <nav_msgs/Odometry.h>
@@ -10,7 +10,6 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
-
 #include <tf2_ros/transform_listener.h>
 
 #include <Eigen/Dense>
@@ -25,7 +24,7 @@
 #include "ros/time.h"
 
 class mavros_ctrl {
-public:
+ public:
   mavros_ctrl(ros::NodeHandle &nh)
       : tf_buffer_(), tf_listener_(tf_buffer_, nh), static_tf_broadcaster_() {
     // 初始化发布器和订阅器
@@ -81,7 +80,6 @@ public:
       const Eigen::Vector3d &velocity = Eigen::Vector3d(0, 0, 0),
       const Eigen::Vector3d &acceleration = Eigen::Vector3d(0, 0, 0),
       double yaw = 0.0, double yaw_rate = 0.0) {
-
     mavros_msgs::PositionTarget pos_target;
 
     // 设置头信息和坐标系
@@ -101,57 +99,57 @@ public:
 
     // 根据控制模式设置type_mask和对应的值
     switch (control_mode) {
-    case 0: // 仅位置控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
-                  mavros_msgs::PositionTarget::IGNORE_VY |
-                  mavros_msgs::PositionTarget::IGNORE_VZ |
-                  mavros_msgs::PositionTarget::IGNORE_AFX |
-                  mavros_msgs::PositionTarget::IGNORE_AFY |
-                  mavros_msgs::PositionTarget::IGNORE_AFZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 0:  // 仅位置控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
+                    mavros_msgs::PositionTarget::IGNORE_VY |
+                    mavros_msgs::PositionTarget::IGNORE_VZ |
+                    mavros_msgs::PositionTarget::IGNORE_AFX |
+                    mavros_msgs::PositionTarget::IGNORE_AFY |
+                    mavros_msgs::PositionTarget::IGNORE_AFZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    case 1: // 仅速度控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
-                  mavros_msgs::PositionTarget::IGNORE_PY |
-                  mavros_msgs::PositionTarget::IGNORE_PZ |
-                  mavros_msgs::PositionTarget::IGNORE_AFX |
-                  mavros_msgs::PositionTarget::IGNORE_AFY |
-                  mavros_msgs::PositionTarget::IGNORE_AFZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 1:  // 仅速度控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
+                    mavros_msgs::PositionTarget::IGNORE_PY |
+                    mavros_msgs::PositionTarget::IGNORE_PZ |
+                    mavros_msgs::PositionTarget::IGNORE_AFX |
+                    mavros_msgs::PositionTarget::IGNORE_AFY |
+                    mavros_msgs::PositionTarget::IGNORE_AFZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    case 2: // 仅加速度控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
-                  mavros_msgs::PositionTarget::IGNORE_PY |
-                  mavros_msgs::PositionTarget::IGNORE_PZ |
-                  mavros_msgs::PositionTarget::IGNORE_VX |
-                  mavros_msgs::PositionTarget::IGNORE_VY |
-                  mavros_msgs::PositionTarget::IGNORE_VZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 2:  // 仅加速度控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
+                    mavros_msgs::PositionTarget::IGNORE_PY |
+                    mavros_msgs::PositionTarget::IGNORE_PZ |
+                    mavros_msgs::PositionTarget::IGNORE_VX |
+                    mavros_msgs::PositionTarget::IGNORE_VY |
+                    mavros_msgs::PositionTarget::IGNORE_VZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    case 3: // 位置+速度控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_AFX |
-                  mavros_msgs::PositionTarget::IGNORE_AFY |
-                  mavros_msgs::PositionTarget::IGNORE_AFZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 3:  // 位置+速度控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_AFX |
+                    mavros_msgs::PositionTarget::IGNORE_AFY |
+                    mavros_msgs::PositionTarget::IGNORE_AFZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    case 4: // 位置+速度+加速度控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 4:  // 位置+速度+加速度控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    default:
-      ROS_WARN("Unknown control mode: %d, using position control",
-               control_mode);
-      type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
-                  mavros_msgs::PositionTarget::IGNORE_VY |
-                  mavros_msgs::PositionTarget::IGNORE_VZ |
-                  mavros_msgs::PositionTarget::IGNORE_AFX |
-                  mavros_msgs::PositionTarget::IGNORE_AFY |
-                  mavros_msgs::PositionTarget::IGNORE_AFZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      default:
+        ROS_WARN("Unknown control mode: %d, using position control",
+                 control_mode);
+        type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
+                    mavros_msgs::PositionTarget::IGNORE_VY |
+                    mavros_msgs::PositionTarget::IGNORE_VZ |
+                    mavros_msgs::PositionTarget::IGNORE_AFX |
+                    mavros_msgs::PositionTarget::IGNORE_AFY |
+                    mavros_msgs::PositionTarget::IGNORE_AFZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
     }
 
     // 根据yaw_rate是否为0决定是否使用偏航角速率控制
@@ -267,57 +265,57 @@ public:
     uint16_t type_mask = 0;
 
     switch (control_mode) {
-    case 0: // 仅位置控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
-                  mavros_msgs::PositionTarget::IGNORE_VY |
-                  mavros_msgs::PositionTarget::IGNORE_VZ |
-                  mavros_msgs::PositionTarget::IGNORE_AFX |
-                  mavros_msgs::PositionTarget::IGNORE_AFY |
-                  mavros_msgs::PositionTarget::IGNORE_AFZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 0:  // 仅位置控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
+                    mavros_msgs::PositionTarget::IGNORE_VY |
+                    mavros_msgs::PositionTarget::IGNORE_VZ |
+                    mavros_msgs::PositionTarget::IGNORE_AFX |
+                    mavros_msgs::PositionTarget::IGNORE_AFY |
+                    mavros_msgs::PositionTarget::IGNORE_AFZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    case 1: // 仅速度控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
-                  mavros_msgs::PositionTarget::IGNORE_PY |
-                  mavros_msgs::PositionTarget::IGNORE_PZ |
-                  mavros_msgs::PositionTarget::IGNORE_AFX |
-                  mavros_msgs::PositionTarget::IGNORE_AFY |
-                  mavros_msgs::PositionTarget::IGNORE_AFZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 1:  // 仅速度控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
+                    mavros_msgs::PositionTarget::IGNORE_PY |
+                    mavros_msgs::PositionTarget::IGNORE_PZ |
+                    mavros_msgs::PositionTarget::IGNORE_AFX |
+                    mavros_msgs::PositionTarget::IGNORE_AFY |
+                    mavros_msgs::PositionTarget::IGNORE_AFZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    case 2: // 仅加速度控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
-                  mavros_msgs::PositionTarget::IGNORE_PY |
-                  mavros_msgs::PositionTarget::IGNORE_PZ |
-                  mavros_msgs::PositionTarget::IGNORE_VX |
-                  mavros_msgs::PositionTarget::IGNORE_VY |
-                  mavros_msgs::PositionTarget::IGNORE_VZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 2:  // 仅加速度控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
+                    mavros_msgs::PositionTarget::IGNORE_PY |
+                    mavros_msgs::PositionTarget::IGNORE_PZ |
+                    mavros_msgs::PositionTarget::IGNORE_VX |
+                    mavros_msgs::PositionTarget::IGNORE_VY |
+                    mavros_msgs::PositionTarget::IGNORE_VZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    case 3: // 位置+速度控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_AFX |
-                  mavros_msgs::PositionTarget::IGNORE_AFY |
-                  mavros_msgs::PositionTarget::IGNORE_AFZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 3:  // 位置+速度控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_AFX |
+                    mavros_msgs::PositionTarget::IGNORE_AFY |
+                    mavros_msgs::PositionTarget::IGNORE_AFZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    case 4: // 位置+速度+加速度控制
-      type_mask = mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
-      break;
+      case 4:  // 位置+速度+加速度控制
+        type_mask = mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+        break;
 
-    default:
-      ROS_WARN("Unknown control mode: %d, using position control",
-               control_mode);
-      type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
-                  mavros_msgs::PositionTarget::IGNORE_VY |
-                  mavros_msgs::PositionTarget::IGNORE_VZ |
-                  mavros_msgs::PositionTarget::IGNORE_AFX |
-                  mavros_msgs::PositionTarget::IGNORE_AFY |
-                  mavros_msgs::PositionTarget::IGNORE_AFZ |
-                  mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+      default:
+        ROS_WARN("Unknown control mode: %d, using position control",
+                 control_mode);
+        type_mask = mavros_msgs::PositionTarget::IGNORE_VX |
+                    mavros_msgs::PositionTarget::IGNORE_VY |
+                    mavros_msgs::PositionTarget::IGNORE_VZ |
+                    mavros_msgs::PositionTarget::IGNORE_AFX |
+                    mavros_msgs::PositionTarget::IGNORE_AFY |
+                    mavros_msgs::PositionTarget::IGNORE_AFZ |
+                    mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
     }
 
     // 根据yaw_rate是否为0决定是否使用偏航角速率控制
@@ -333,7 +331,7 @@ public:
 
   // 初始化函数 - 发送一些位置设定点并等待连接
   bool initialize() {
-    ros::Rate rate(50.0); // 增加频率到50Hz
+    ros::Rate rate(50.0);  // 增加频率到50Hz
 
     // 等待连接
     ROS_INFO("Waiting for FCU connection...");
@@ -504,7 +502,7 @@ public:
     }
   }
 
-private:
+ private:
   // 初始化坐标变换
   void initializeTransform() {
     // 记录初始位置，用于后续计算
@@ -550,7 +548,7 @@ private:
   void target_pos_cb(const geometry_msgs::PoseStamped::ConstPtr &msg) {
     target_positions_ = *msg;
 
-    target_positions_.header.frame_id = "world_body"; // 设置坐标系
+    target_positions_.header.frame_id = "world_body";  // 设置坐标系
 
     // 判断 z 坐标是否小于 -1
     if (target_positions_.pose.position.z < -0.9) {
@@ -558,7 +556,7 @@ private:
 
       // 设置飞行模式为自动降落模式
       mavros_msgs::SetMode set_mode;
-      set_mode.request.custom_mode = "AUTO.LAND"; // 设置为降落模式
+      set_mode.request.custom_mode = "AUTO.LAND";  // 设置为降落模式
       if (set_mode_client_.call(set_mode)) {
         ROS_INFO("成功设置自动降落模式");
       } else {
@@ -567,7 +565,7 @@ private:
 
       // 发送降落指令
       mavros_msgs::CommandTOL land_cmd;
-      land_cmd.request.altitude = 0; // 降落到地面
+      land_cmd.request.altitude = 0;  // 降落到地面
       if (land_client_.call(land_cmd)) {
         ROS_INFO("开始降落...");
       } else {
@@ -575,11 +573,11 @@ private:
       }
 
       // 等待无人机降落完成
-      ros::Duration(3.0).sleep(); // 等待一些时间，确保无人机已降落
+      ros::Duration(3.0).sleep();  // 等待一些时间，确保无人机已降落
 
       // 停桨（解除电机控制）
       mavros_msgs::CommandBool arm_cmd;
-      arm_cmd.request.value = false; // 停用电机
+      arm_cmd.request.value = false;  // 停用电机
       if (arming_client_.call(arm_cmd)) {
         ROS_INFO("电机已停");
       } else {
@@ -621,7 +619,7 @@ private:
   }
 
   // 成员变量
-  ros::Publisher raw_pos_pub_; // 改为发布PositionTarget
+  ros::Publisher raw_pos_pub_;  // 改为发布PositionTarget
   ros::Publisher current_world_body_pos_pub_;
   ros::Subscriber target_pos_sub_;
   ros::Subscriber state_sub_;
@@ -633,9 +631,9 @@ private:
   geometry_msgs::PoseStamped current_pose_;
   geometry_msgs::PoseStamped transformed_target_;
   geometry_msgs::PoseStamped initial_pose_;
-  mavros_msgs::PositionTarget default_pos_target_; // 默认位置目标
+  mavros_msgs::PositionTarget default_pos_target_;  // 默认位置目标
   geometry_msgs::TransformStamped world_enu_to_world_body_;
-  geometry_msgs::PoseStamped target_positions_; // 目标位置
+  geometry_msgs::PoseStamped target_positions_;  // 目标位置
   // 状态标志
   bool received_pose_ = false;
   bool tf_ready_ = false;
