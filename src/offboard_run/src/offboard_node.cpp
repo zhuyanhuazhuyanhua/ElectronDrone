@@ -1,3 +1,4 @@
+#include <geometry_msgs/Point.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <mavros_msgs/CommandBool.h>
@@ -14,13 +15,13 @@
 
 #include <Eigen/Dense>
 #include <cmath>
-#include <functional>
 
 #include "offboard_run/SlidingWindowAverage.h"
 #include "ros/console.h"
 #include "ros/duration.h"
 #include "ros/init.h"
 #include "ros/rate.h"
+#include "ros/subscriber.h"
 #include "ros/time.h"
 
 class mavros_ctrl {
@@ -50,6 +51,14 @@ class mavros_ctrl {
         std::bind(&mavros_ctrl::target_pos_cb, this, std::placeholders::_1));
     current_world_body_pos_pub_ =
         nh.advertise<geometry_msgs::PoseStamped>("/current_world_body_pos", 10);
+
+    // 接受摄像头的校正
+    cam_aim_sub_ = nh.subscribe<geometry_msgs::Point>(
+        "/camera_aiming_center", 10,
+        std::bind(&mavros_ctrl::cam_aim_cb, this, std::placeholders::_1));
+
+    nh.getParam("use_camera_aim", use_camera_aim_);
+    ROS_INFO("Use camera aiming: %s", use_camera_aim_ ? "true" : "false");
 
     // 初始化默认位置目标
     initializePositionTarget(4, false, Eigen::Vector3d(0, 0, 1.2),
@@ -351,7 +360,7 @@ class mavros_ctrl {
 
     // 发送一些位置设定点
     ROS_INFO("Sending initial setpoints...");
-    for (int i = 300; ros::ok() && i > 0; --i) {
+    for (int i = 50; ros::ok() && i > 0; --i) {
       if (received_pose_) {
         mavros_msgs::PositionTarget pos_target =
             poseToPositionTarget(current_pose_);
@@ -378,7 +387,7 @@ class mavros_ctrl {
 
     // 按照官方顺序: 先切换模式，成功后再尝试解锁
     if (current_state_.mode != "OFFBOARD" &&
-        (ros::Time::now() - last_request_ > ros::Duration(6.0))) {
+        (ros::Time::now() - last_request_ > ros::Duration(1.0))) {
       // 尝试切换到OFFBOARD模式
       mavros_msgs::SetMode offb_set_mode;
       offb_set_mode.request.custom_mode = "OFFBOARD";
@@ -391,7 +400,7 @@ class mavros_ctrl {
       }
       last_request_ = ros::Time::now();
     } else if (!current_state_.armed &&
-               (ros::Time::now() - last_request_ > ros::Duration(6.0))) {
+               (ros::Time::now() - last_request_ > ros::Duration(1.0))) {
       // 只有在OFFBOARD模式时才尝试解锁
       mavros_msgs::CommandBool arm_cmd;
       arm_cmd.request.value = true;
@@ -433,39 +442,64 @@ class mavros_ctrl {
     mavros_msgs::PositionTarget setpoint;
     bool setpoint_ready = false;
 
+    // 检查aim数据有效性
+    if (ros::Time::now() - last_cam_aim_receive_time_ >
+        ros::Duration(CAM_AIMING_TIMEOUT)) {
+      is_aiming_ = false;  // 超时后退出AIMING模式
+      ROS_WARN("Camera aiming timeout, exiting AIMING mode.");
+    }
+
     // 优先级1: 如果有有效的目标位置，使用它
     if (current_state_.armed && tf_ready_ && target_is_transformed_) {
-      // 使用转换后的目标位置
-      setpoint = poseToPositionTarget(transformed_target_, 4, false,
-                                      Eigen::Vector3d(0, 0, 0),
-                                      Eigen::Vector3d(0, 0, 2));
+      if (!is_aiming_) {
+        // 使用转换后的目标位置
+        setpoint = poseToPositionTarget(transformed_target_, 4, false,
+                                        Eigen::Vector3d(0, 0, 0),
+                                        Eigen::Vector3d(0, 0, 2));
 
-      // 打印详细的目标信息
-      ROS_INFO("--------- TARGET COMMAND ---------");
-      ROS_INFO("Target Received: [%.3f, %.3f, %.3f]",
-               target_positions_.pose.position.x,
-               target_positions_.pose.position.y,
-               target_positions_.pose.position.z);
-      ROS_INFO("Frame: %s (coordinate_frame=%d)",
-               transformed_target_.header.frame_id.c_str(),
-               setpoint.coordinate_frame);
-      ROS_INFO("Position: [%.3f, %.3f, %.3f]", setpoint.position.x,
-               setpoint.position.y, setpoint.position.z);
-      ROS_INFO("Velocity: [%.3f, %.3f, %.3f]", setpoint.velocity.x,
-               setpoint.velocity.y, setpoint.velocity.z);
-      ROS_INFO(
-          "Acceleration: [%.3f, %.3f, %.3f]", setpoint.acceleration_or_force.x,
-          setpoint.acceleration_or_force.y, setpoint.acceleration_or_force.z);
-      ROS_INFO("Yaw: %.3f, Yaw rate: %.3f", setpoint.yaw, setpoint.yaw_rate);
-      ROS_INFO("Type mask: %d", setpoint.type_mask);
-      ROS_INFO("Current position : [%.3f, %.3f, %.3f]",
-               current_pose_.pose.position.x, current_pose_.pose.position.y,
-               current_pose_.pose.position.z);
-      ROS_INFO("---------------------------------");
+        // 打印详细的目标信息
+        ROS_INFO("--------- TARGET COMMAND ---------");
+        ROS_INFO("Target Received: [%.3f, %.3f, %.3f]",
+                 target_positions_.pose.position.x,
+                 target_positions_.pose.position.y,
+                 target_positions_.pose.position.z);
+        ROS_INFO("Frame: %s (coordinate_frame=%d)",
+                 transformed_target_.header.frame_id.c_str(),
+                 setpoint.coordinate_frame);
+        ROS_INFO("Position: [%.3f, %.3f, %.3f]", setpoint.position.x,
+                 setpoint.position.y, setpoint.position.z);
+        ROS_INFO("Velocity: [%.3f, %.3f, %.3f]", setpoint.velocity.x,
+                 setpoint.velocity.y, setpoint.velocity.z);
+        ROS_INFO("Acceleration: [%.3f, %.3f, %.3f]",
+                 setpoint.acceleration_or_force.x,
+                 setpoint.acceleration_or_force.y,
+                 setpoint.acceleration_or_force.z);
+        ROS_INFO("Yaw: %.3f, Yaw rate: %.3f", setpoint.yaw, setpoint.yaw_rate);
+        ROS_INFO("Type mask: %d", setpoint.type_mask);
+        ROS_INFO("Current position : [%.3f, %.3f, %.3f]",
+                 current_pose_.pose.position.x, current_pose_.pose.position.y,
+                 current_pose_.pose.position.z);
+        ROS_INFO("---------------------------------");
 
-      setpoint_ready = true;
+        setpoint_ready = true;
 
-      // 处理位姿更新和导航
+        // 处理位姿更新和导航
+      } else {
+        // 如果处于AIMING模式，使用摄像头校正的聚焦中心
+        static constexpr double p = 10;
+        setpoint = poseToPositionTarget(
+            geometry_msgs::PoseStamped(), 4, true,
+            Eigen::Vector3d(aiming_center_.x / p, aiming_center_.y / p, 0),
+            Eigen::Vector3d(0, 0, 0), 0.0, 0.0);
+
+        ROS_INFO("--------- AIMING MODE ---------");
+        ROS_INFO("Aiming Center: [%.3f, %.3f]", aiming_center_.x,
+                 aiming_center_.y);
+        ROS_INFO("Set Velocity: [%.3f, %.3f, %.3f]", setpoint.velocity.x,
+                 setpoint.velocity.y, setpoint.velocity.z);
+        ROS_INFO("--------------------------------");
+        setpoint_ready = true;
+      }
     }
     // 优先级2: 如果没有有效目标，但有当前位置，使用当前位置
     else if (received_pose_) {
@@ -492,7 +526,7 @@ class mavros_ctrl {
 
     if (tf_ready_) {
       // 更新位姿和导航
-      updatePoseAndNavigation();
+      pubCurrentWorldPose();
     }
 
     // 发布准备好的setpoint（只发布一次）
@@ -530,8 +564,8 @@ class mavros_ctrl {
     tf_ready_ = true;
   }
 
-  // 更新位姿和导航
-  void updatePoseAndNavigation() {
+  // pub 当前位姿到 world_body 坐标系
+  void pubCurrentWorldPose() {
     if (tf_ready_) {
       geometry_msgs::PoseStamped current_world_body;
       try {
@@ -550,8 +584,8 @@ class mavros_ctrl {
 
     target_positions_.header.frame_id = "world_body";  // 设置坐标系
 
-    // 判断 z 坐标是否小于 -1
-    if (target_positions_.pose.position.z < -0.9) {
+    // 判断 z 坐标是否为 -1.0
+    if (target_positions_.pose.position.z == -1.0) {
       // 尝试上锁
 
       // 设置飞行模式为自动降落模式
@@ -583,6 +617,11 @@ class mavros_ctrl {
       } else {
         ROS_ERROR("停桨命令失败");
       }
+    } else if (target_positions_.pose.position.z == -2.0 &&
+               ros::Time::now() - last_cam_aim_receive_time_ <
+                   ros::Duration(CAM_AIMING_TIMEOUT)) {
+      // 进入AIMING模式
+      is_aiming_ = true;
     }
 
     if (!tf_ready_) {
@@ -618,6 +657,13 @@ class mavros_ctrl {
     slid_window_avg.addPose(current_pose_);
   }
 
+  void cam_aim_cb(const geometry_msgs::Point::ConstPtr &msg) {
+    aiming_center_ = *msg;
+    last_cam_aim_receive_time_ = ros::Time::now();
+    ROS_INFO("Received camera aiming center: [%.3f, %.3f]", aiming_center_.x,
+             aiming_center_.y);
+  }
+
   // 成员变量
   ros::Publisher raw_pos_pub_;  // 改为发布PositionTarget
   ros::Publisher current_world_body_pos_pub_;
@@ -634,6 +680,15 @@ class mavros_ctrl {
   mavros_msgs::PositionTarget default_pos_target_;  // 默认位置目标
   geometry_msgs::TransformStamped world_enu_to_world_body_;
   geometry_msgs::PoseStamped target_positions_;  // 目标位置
+
+  // 摄像头校正相关
+  geometry_msgs::Point aiming_center_;  // 聚焦中心位置
+  ros::Subscriber cam_aim_sub_;
+  ros::Time last_cam_aim_receive_time_;  // 最后一次接收摄像头校正的时间
+  bool use_camera_aim_ = false;          // 是否使用摄像头校正
+  static constexpr double CAM_AIMING_TIMEOUT = 0.5;  // 摄像头校正超时时间
+  bool is_aiming_ = false;  // 是否处于摄像头校正状态
+
   // 状态标志
   bool received_pose_ = false;
   bool tf_ready_ = false;
