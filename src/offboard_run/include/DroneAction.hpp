@@ -1,0 +1,139 @@
+#pragma once
+
+#include <geometry_msgs/Point.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <ros/ros.h>  // 添加这个以使用 ros::Time
+
+#include <cmath>
+#include <memory>
+
+struct SpatialPoint {
+  double x;
+  double y;
+  double z;
+
+  SpatialPoint(double x = 0.0, double y = 0.0, double z = 0.0)
+      : x(x), y(y), z(z) {}
+
+  SpatialPoint(const geometry_msgs::PoseStamped& pose)
+      : x(pose.pose.position.x),
+        y(pose.pose.position.y),
+        z(pose.pose.position.z) {}
+
+  SpatialPoint(const geometry_msgs::Point& point)
+      : x(point.x), y(point.y), z(point.z) {}
+
+  double distance(const SpatialPoint& other) const {
+    return std::sqrt(std::pow(x - other.x, 2) + std::pow(y - other.y, 2) +
+                     std::pow(z - other.z, 2));
+  }
+
+  double distanceXY(const SpatialPoint& other) const {
+    return std::sqrt(std::pow(x - other.x, 2) + std::pow(y - other.y, 2));
+  }
+};
+
+// 动作类型枚举
+enum class ActionType {
+  MOVE_TO_POSITION = 0,  // 移动到指定位置
+  HOVER,                 // 悬停
+  CAMERA_AIM,            // 相机瞄准
+  LAND,                  // 降落
+  TAKEOFF                // 起飞
+};
+
+// 动作状态枚举
+enum class ActionStatus {
+  PENDING,    // 等待执行
+  EXECUTING,  // 正在执行
+  COMPLETED,  // 已完成
+  FAILED,     // 失败
+  ABORTED     // 中止
+};
+
+class DroneAction {
+ private:
+  // 将构造函数声明为私有，但让工厂方法可以访问
+  struct PrivateTag {};  // 用于控制访问的标签
+
+ public:
+  // 允许 make_shared 访问的构造函数
+  explicit DroneAction(PrivateTag) {}
+
+  // 移动到位置的构造函数
+  static std::shared_ptr<DroneAction> createMoveToAction(
+      const geometry_msgs::PoseStamped& target_pose,
+      bool use_body_frame = false, double position_tolerance = 0.1) {
+    auto action = std::make_shared<DroneAction>(PrivateTag{});
+    action->type_ = ActionType::MOVE_TO_POSITION;
+    action->target_pose_ = target_pose;
+    action->use_body_frame_ = use_body_frame;
+    action->position_tolerance_ = position_tolerance;
+    return action;
+  }
+
+  // 悬停动作
+  static std::shared_ptr<DroneAction> createHoverAction(double hover_time_s) {
+    auto action = std::make_shared<DroneAction>(PrivateTag{});
+    action->type_ = ActionType::HOVER;
+    action->hover_time_s_ = hover_time_s;
+    return action;
+  }
+
+  // 相机瞄准动作
+  static std::shared_ptr<DroneAction> createCameraAimAction(
+      const geometry_msgs::PoseStamped& target_pose,
+      double camera_aim_tolerance = 10.0,  // 像素
+      double position_tolerance = 0.5) {   // 米
+    auto action = std::make_shared<DroneAction>(PrivateTag{});
+    action->type_ = ActionType::CAMERA_AIM;
+    action->target_pose_ = target_pose;
+    action->camera_aim_tolerance_ = camera_aim_tolerance;
+    action->position_tolerance_ = position_tolerance;
+    return action;
+  }
+
+  // 降落动作
+  static std::shared_ptr<DroneAction> createLandAction() {
+    auto action = std::make_shared<DroneAction>(PrivateTag{});
+    action->type_ = ActionType::LAND;
+    return action;
+  }
+
+  // 起飞动作
+  static std::shared_ptr<DroneAction> createTakeoffAction(
+      double target_altitude) {
+    auto action = std::make_shared<DroneAction>(PrivateTag{});
+    action->type_ = ActionType::TAKEOFF;
+    action->target_altitude_ = target_altitude;
+    return action;
+  }
+
+  // Getters
+  ActionType getType() const { return type_; }
+  ActionStatus getStatus() const { return status_; }
+  geometry_msgs::PoseStamped getTargetPose() const { return target_pose_; }
+  bool useBodyFrame() const { return use_body_frame_; }
+  double getHoverTime() const { return hover_time_s_; }
+  double getPositionTolerance() const { return position_tolerance_; }
+  double getCameraAimTolerance() const { return camera_aim_tolerance_; }
+  double getTargetAltitude() const { return target_altitude_; }
+  ros::Time getStartTime() const { return start_time_; }
+
+  // Setters
+  void setStatus(ActionStatus status) { status_ = status; }
+  void setStartTime(ros::Time time) { start_time_ = time; }
+
+ private:
+  ActionType type_;
+  ActionStatus status_ = ActionStatus::PENDING;
+
+  geometry_msgs::PoseStamped target_pose_;
+  bool use_body_frame_ = false;
+  double hover_time_s_ = 0.0;
+  double position_tolerance_ = 0.1;     // 位置容差（米）
+  double camera_aim_tolerance_ = 10.0;  // 相机瞄准容差（像素）
+  double target_altitude_ = 1.2;        // 目标高度
+
+  ros::Time start_time_;
+};

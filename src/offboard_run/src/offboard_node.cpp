@@ -585,7 +585,8 @@ class mavros_ctrl {
     target_positions_.header.frame_id = "world_body";  // 设置坐标系
 
     // 判断 z 坐标是否为 -1.0
-    if (target_positions_.pose.position.z == -1.0) {
+    if (target_positions_.pose.position.z > -1.1 &&
+        target_positions_.pose.position.z < -0.9) {
       // 尝试上锁
 
       // 设置飞行模式为自动降落模式
@@ -617,7 +618,8 @@ class mavros_ctrl {
       } else {
         ROS_ERROR("停桨命令失败");
       }
-    } else if (target_positions_.pose.position.z == -2.0 &&
+    } else if (use_camera_aim_ && target_positions_.pose.position.z > -2.1 &&
+               target_positions_.pose.position.z < -1.9 &&
                ros::Time::now() - last_cam_aim_receive_time_ <
                    ros::Duration(CAM_AIMING_TIMEOUT)) {
       // 进入AIMING模式
@@ -662,6 +664,16 @@ class mavros_ctrl {
     last_cam_aim_receive_time_ = ros::Time::now();
     ROS_INFO("Received camera aiming center: [%.3f, %.3f]", aiming_center_.x,
              aiming_center_.y);
+    static constexpr double close_thresh = 10;
+    if (aiming_center_.x < close_thresh && aiming_center_.y < close_thresh) {
+      aim_close_count_++;
+      if (aim_close_count_ > 5) {
+        is_aiming_ = false;  // 如果连续5次接近中心，则退出AIMING模式
+        ROS_INFO("Exiting AIMING mode due to close center.");
+      }
+    } else {
+      aim_close_count_ = 0;  // 重置计数器
+    }
   }
 
   // 成员变量
@@ -680,6 +692,7 @@ class mavros_ctrl {
   mavros_msgs::PositionTarget default_pos_target_;  // 默认位置目标
   geometry_msgs::TransformStamped world_enu_to_world_body_;
   geometry_msgs::PoseStamped target_positions_;  // 目标位置
+  int aim_close_count_ = 0;
 
   // 摄像头校正相关
   geometry_msgs::Point aiming_center_;  // 聚焦中心位置
