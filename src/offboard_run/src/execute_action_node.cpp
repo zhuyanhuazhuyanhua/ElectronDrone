@@ -13,6 +13,7 @@
 #include <tf2_ros/transform_listener.h>
 
 #include "ActionExecutor.hpp"
+#include "ros/console.h"
 
 class MissionController {
  public:
@@ -230,6 +231,15 @@ class MissionController {
     if (mission_actions_.empty()) {
       ROS_WARN("Cannot start mission: no actions loaded");
       return;
+    }
+
+    if (!tf_ready_) {
+      ROS_WARN("Waiting for TF to be ready before starting mission");
+    }
+
+    while (ros::ok() && !tf_ready_) {
+      ros::Duration(0.05).sleep();
+      ros::spinOnce();
     }
 
     ROS_INFO("Starting mission with %zu actions", mission_actions_.size());
