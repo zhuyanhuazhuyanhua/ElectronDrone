@@ -223,8 +223,8 @@ class ActionExecutor {
     }
 
     // 检查是否已经对准
-    if (std::abs(camera_aim_center_.x) < action->getCameraAimTolerance() &&
-        std::abs(camera_aim_center_.y) < action->getCameraAimTolerance()) {
+    if (std::abs(camera_aim_diff_.x) < action->getCameraAimTolerance() &&
+        std::abs(camera_aim_diff_.y) < action->getCameraAimTolerance()) {
       aim_close_count_++;
       if (aim_close_count_ > 20) {
         action->setStatus(ActionStatus::COMPLETED);
@@ -236,8 +236,8 @@ class ActionExecutor {
       aim_close_count_ = 0;
     }
 
-    Eigen::Vector3d camera_aim_vector{camera_aim_center_.x, 0.0,
-                                      camera_aim_center_.y};
+    Eigen::Vector3d camera_aim_vector{camera_aim_diff_.x, camera_aim_diff_.y,
+                                      camera_aim_diff_.z};
 
     // 发送速度控制指令进行对准
     mavros_msgs::PositionTarget vel_cmd;
@@ -305,7 +305,7 @@ class ActionExecutor {
   }
 
   void cameraAimCb(const geometry_msgs::Point::ConstPtr& msg) {
-    camera_aim_center_ = *msg;
+    camera_aim_diff_ = *msg;
     last_camera_aim_time_ = ros::Time::now();
   }
 
@@ -330,7 +330,7 @@ class ActionExecutor {
   // 状态信息
   mavros_msgs::State current_state_;
   geometry_msgs::PoseStamped current_pose_;
-  geometry_msgs::Point camera_aim_center_;
+  geometry_msgs::Point camera_aim_diff_;
   ros::Time last_camera_aim_time_;
   bool current_pose_received_ = false;
   int aim_close_count_ = 0;

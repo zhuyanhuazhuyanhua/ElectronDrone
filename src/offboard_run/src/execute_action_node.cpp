@@ -14,6 +14,7 @@
 
 #include "ActionExecutor.hpp"
 #include "ros/console.h"
+#include "tf2/LinearMath/Quaternion.h"
 
 class MissionController {
  public:
@@ -103,6 +104,7 @@ class MissionController {
 
       } else if (type == "move") {
         XmlRpc::XmlRpcValue pos = mission_config[i]["position"];
+        double yaw = mission_config[i]["yaw"];
         std::string frame = mission_config[i]["frame"];
         double tolerance = 0.1;
         if (mission_config[i].hasMember("tolerance")) {
@@ -114,13 +116,18 @@ class MissionController {
         target.pose.position.x = pos[0];
         target.pose.position.y = pos[1];
         target.pose.position.z = pos[2];
-        target.pose.orientation.w = 1.0;
+        tf2::Quaternion q = tf2::Quaternion();
+        q.setRPY(0, 0, yaw);
+        target.pose.orientation = tf2::toMsg(q);
 
         bool use_body_frame = (frame == "world_body");
         action =
             DroneAction::createMoveToAction(target, use_body_frame, tolerance);
-        ROS_INFO("  Action %d: Move to [%.2f, %.2f, %.2f] in %s frame", i,
-                 (double)pos[0], (double)pos[1], (double)pos[2], frame.c_str());
+        ROS_INFO(
+            "  Action %d: Move to [%.2f, %.2f, %.2f] in %s frame, yaw: %.2f "
+            "degree",
+            i, (double)pos[0], (double)pos[1], (double)pos[2], frame.c_str(),
+            yaw * 180.0 / M_PI);
 
       } else if (type == "hover") {
         double duration = mission_config[i]["duration"];
