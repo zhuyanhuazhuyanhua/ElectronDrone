@@ -14,8 +14,11 @@
 #include "ros/subscriber.h"
 #include "ros/timer.h"
 #include "std_msgs/Bool.h"
+
+#define DONT_NEED_ARM
+
 class Body2ENU {
-public:
+ public:
   Body2ENU(ros::NodeHandle &nh)
       : tf_buffer_(), tf_listener_(tf_buffer_, nh), static_tf_broadcaster_() {
     nh.param("pub_world_pose", pub_world_pose_, false);
@@ -25,9 +28,22 @@ public:
     px4_pose_sub_ = nh.subscribe<geometry_msgs::PoseStamped>(
         "/mavros/local_position/pose", 10,
         std::bind(&Body2ENU::px4_pose_cb, this, std::placeholders::_1));
+#ifndef DONT_NEED_ARM
     mavros_state_sub_ = nh.subscribe<mavros_msgs::State>(
         "/mavros/state", 10,
         std::bind(&Body2ENU::state_cb, this, std::placeholders::_1));
+#else
+    init_timer_ =
+        nh.createTimer(ros::Duration(0.5), [this](const ros::TimerEvent &) {
+          if (slid_window_avg.getSize() >= 10 && !tf_ready_) {
+            InitializeTransform();
+            ROS_INFO("Initialized transform from world_enu to world_body");
+            static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
+            tf_ready_ = true;
+            init_timer_.stop();
+          }
+        });
+#endif
 
     if (pub_world_pose_) {
       current_world_body_pos_pub_ = nh.advertise<geometry_msgs::PoseStamped>(
@@ -46,7 +62,7 @@ public:
         });
   }
 
-private:
+ private:
   ros::Publisher tf_status_pub_;
   ros::Publisher current_world_body_pos_pub_;
   ros::Subscriber px4_pose_sub_;
@@ -62,6 +78,9 @@ private:
   bool received_pose_ = false;
   bool pub_world_pose_ = false;
 
+#ifdef DONT_NEED_ARM
+  ros::Timer init_timer_;
+#endif
   ros::Timer tf_cast_timer_;
 
   void px4_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg) {
@@ -86,9 +105,9 @@ private:
     }
   }
 
+#ifndef DONT_NEED_ARM
   void state_cb(const mavros_msgs::State::ConstPtr &msg) {
     current_state_ = *msg;
-
     if (msg->armed) {
       // 如果处于OFFBOARD模式且已解锁，初始化坐标变换
       if (!tf_ready_) {
@@ -100,6 +119,7 @@ private:
       ROS_ERROR("Drone is not armed, cannot initialize transform");
     }
   }
+#endif
 
   void InitializeTransform() {
     // 记录初始位置，用于后续计算
