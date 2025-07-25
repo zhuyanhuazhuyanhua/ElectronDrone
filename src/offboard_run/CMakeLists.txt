@@ -215,13 +215,23 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 add_executable(offboard_run_node src/offboard_node.cpp)
+add_executable(world_body_to_world_enu src/world_body_to_world_enu.cpp)
+add_executable(target_pub_node src/target_pub_node.cpp)
+add_executable(execute_action_node src/execute_action_node.cpp)
 
 target_link_libraries(offboard_run_node
   ${catkin_LIBRARIES}
 )
 
-add_executable(target_pub_node src/target_pub_node.cpp)
+target_link_libraries(world_body_to_world_enu
+  ${catkin_LIBRARIES}
+)
 
 target_link_libraries(target_pub_node
+  ${catkin_LIBRARIES}
+)
+
+
+target_link_libraries(execute_action_node
   ${catkin_LIBRARIES}
 )

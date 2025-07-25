@@ -1,0 +1,52 @@
+# Mission configuration
+mission:
+  # 起飞高度
+  takeoff_altitude: 1.2
+  
+  # 任务序列
+  actions:
+    - type: "takeoff"
+      altitude: 1.2
+      
+    - type: "move"
+      position: [2.0, 0.0, 1.5]
+      yaw: 0.0
+      frame: "world_body"
+      tolerance: 0.1
+      
+    - type: "hover"
+      duration: 2.0
+      
+    - type: "move"
+      position: [2.0, 2.0, 1.5]
+      yaw: 0.0
+      frame: "world_body"
+      tolerance: 0.1
+      
+    - type: "hover"
+      duration: 2.0
+      
+    - type: "move"
+      position: [0.0, 2.0, 1.5]
+      yaw: 0.0
+      frame: "world_body"
+      tolerance: 0.1
+      
+    - type: "camera_aim"
+      position: [0.0, 2.0, 1.5]
+      yaw: 0.0
+      frame: "world_body"
+      tolerance: 10.0  # 像素
+      
+    - type: "move"
+      position: [0.0, 0.0, 1.2]
+      yaw: 0.0
+      frame: "world_body"
+      tolerance: 0.1
+      
+    - type: "land"
+
+# 系统参数
+system:
+  use_camera_aim: true
+  auto_start_mission: true  # 解锁后自动开始任务

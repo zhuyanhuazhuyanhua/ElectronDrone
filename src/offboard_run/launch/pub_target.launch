@@ -10,6 +10,9 @@
 
     <!-- 启动节点 -->
     <node name="offboard_run_node" pkg="offboard_run" type="offboard_run_node" output="screen"/>
+        <param name="use_camera_aim" value=true />
+    </node>
+
     <node name="target_pub_node" pkg="offboard_run" type="target_pub_node" output="screen"/>
 
 </launch>

@@ -1,0 +1,20 @@
+<launch>
+  <!-- MAVROS (如果需要的话取消注释) -->
+  <!-- <include file="$(find mavros)/launch/px4.launch">
+    <arg name="fcu_url" value="udp://:14540@127.0.0.1:14557" />
+  </include> -->
+  
+  <arg name="pub_world_pose" default="false" />
+  <arg name="mission_config" default="$(find offboard_run)/config/simple.yaml" />
+
+  <!-- 加载任务配置 -->
+  <rosparam file="$(arg mission_config)" command="load" />
+
+  <!-- TF转换节点 -->
+  <node name="world_body_to_world_enu" pkg="offboard_run" type="world_body_to_world_enu" output="screen">
+    <param name="pub_world_pose" value="$(arg pub_world_pose)" />
+  </node>
+
+  <!-- 任务执行节点 -->
+  <node name="execute_action_node" pkg="offboard_run" type="execute_action_node" output="screen" />
+</launch>
