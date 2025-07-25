@@ -100,15 +100,17 @@ public:
     setpoint_pub_.publish(pos_target);
   }
 
-  Eigen::Vector3d BodyVelocity2NED(const Eigen::Vector3d &body_vec) {
+  Eigen::Vector3d BodyVelocity2ENU(const Eigen::Vector3d &body_vec) {
     // 将机体坐标系下的速度转换为NED坐标系
     Eigen::Vector3d enu_vec;
     Eigen::Quaterniond q_current = Eigen::Quaterniond(
         current_pose_.pose.orientation.w, current_pose_.pose.orientation.x,
         current_pose_.pose.orientation.y, current_pose_.pose.orientation.z);
     enu_vec = q_current * body_vec; // 转到ENU
-    Eigen::Vector3d ned_vec(enu_vec.y(), enu_vec.x(), -enu_vec.z());
-    return ned_vec;
+    // ROS_INFO("ENU vector: [%f, %f, %f]", enu_vec.x(), enu_vec.y(),
+    // enu_vec.z()); Eigen::Vector3d ned_vec(enu_vec.y(), enu_vec.x(),
+    // -enu_vec.z());
+    return enu_vec;
   }
 
   // 主控制循环
@@ -225,6 +227,7 @@ private:
     if (ros::Time::now() - last_camera_aim_time_ > ros::Duration(0.5)) {
       // 相机数据超时，执行普通位置控制
       // TODO 检查逻辑
+      ROS_WARN("Camera aim data timeout, executing position control!");
       executeMoveToPosition(action);
       return;
     }
@@ -246,11 +249,13 @@ private:
 
     Eigen::Vector3d camera_aim_vector{camera_aim_diff_.x, camera_aim_diff_.y,
                                       camera_aim_diff_.z};
+    ROS_INFO("Camera aim vector: [%f, %f, %f]", camera_aim_vector.x(),
+             camera_aim_vector.y(), camera_aim_vector.z());
 
     // 发送速度控制指令进行对准
     mavros_msgs::PositionTarget vel_cmd;
     static const double P_gain = 0.001;
-    Eigen::Vector3d ned_velocity = BodyVelocity2NED(camera_aim_vector * P_gain);
+    Eigen::Vector3d ned_velocity = BodyVelocity2ENU(camera_aim_vector * P_gain);
     vel_cmd.header.stamp = ros::Time::now();
     vel_cmd.header.frame_id = "world_enu";
     vel_cmd.coordinate_frame = mavros_msgs::PositionTarget::FRAME_BODY_NED;
@@ -266,7 +271,7 @@ private:
     vel_cmd.velocity.x = ned_velocity.x();
     vel_cmd.velocity.y = ned_velocity.y();
     vel_cmd.velocity.z = ned_velocity.z();
-    ROS_INFO("Camera aim velocity: [%f, %f, %f]", vel_cmd.velocity.x,
+    ROS_WARN("Camera aim velocity: [%f, %f, %f]", vel_cmd.velocity.x,
              vel_cmd.velocity.y, vel_cmd.velocity.z);
 
     setpoint_pub_.publish(vel_cmd);

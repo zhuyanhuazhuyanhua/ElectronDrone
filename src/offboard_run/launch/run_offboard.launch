@@ -5,7 +5,7 @@
   </include> -->
   
   <arg name="pub_world_pose" default="false" />
-  <arg name="mission_config" default="$(find offboard_run)/config/simple.yaml" />
+  <arg name="mission_config" default="$(find offboard_run)/config/cam_aim.yaml" />
 
   <!-- 加载任务配置 -->
   <rosparam file="$(arg mission_config)" command="load" />
