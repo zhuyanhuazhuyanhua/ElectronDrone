@@ -332,7 +332,7 @@ int main(int argc, char **argv)
   ros::NodeHandle nh;
 
   // 打开摄像头
-  cv::VideoCapture cap(0);
+  cv::VideoCapture cap(2);
   if (!cap.isOpened()) {
     ROS_ERROR("无法打开摄像头");
     return -1;

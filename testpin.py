@@ -1,34 +1,28 @@
-#!/usr/bin/env python3
-import RPi.GPIO as GPIO
+#!/usr/bin/env python
 
-def check_pwm_pins():
-    GPIO.setmode(GPIO.BCM)
-    
-    print(f"板子型号: {GPIO.model}")
-    print("检查可用的PWM引脚:")
-    
-    # 测试常见的引脚
-    
-    available_pwm = []
-    
-    for pin in range(0, 28):
-        try:
-            GPIO.setup(pin, GPIO.OUT)
-            pwm = GPIO.PWM(pin, 50)
-            pwm.start(10)  # 启动PWM，初始占空比为0%
-            available_pwm.append(pin)
-            print(f"引脚 {pin}: ✓ 支持PWM")
-            # 不启动PWM，只是测试是否可以创建
-        except Exception as e:
-            print(f"引脚 {pin}: ✗ 不支持PWM - {str(e)}")
-        finally:
-            try:
-                GPIO.cleanup(pin)
-            except:
-                pass
-    
-    print(f"\n可用的PWM引脚: {available_pwm}")
-    GPIO.cleanup()
+import RPi.GPIO as GPIO
+import time
+
+# Pin Definitions
+output_pin = 17  # BCM pin 18, BOARD pin 12
+
+def main():
+    # Pin Setup:
+    GPIO.setmode(GPIO.BCM)  # BCM pin-numbering scheme from Raspberry Pi
+    # set pin as an output pin with optional initial state of HIGH
+    GPIO.setup(output_pin, GPIO.OUT, initial=GPIO.HIGH)
+
+    print("Starting demo now! Press CTRL+C to exit")
+    curr_value = GPIO.HIGH
+    try:
+        while True:
+            time.sleep(1)
+            # Toggle the output every second
+            print("Outputting {} to pin {}".format(curr_value, output_pin))
+            GPIO.output(output_pin, curr_value)
+            curr_value ^= GPIO.HIGH
+    finally:
+        GPIO.cleanup()
 
 if __name__ == '__main__':
-    check_pwm_pins()
+    main()

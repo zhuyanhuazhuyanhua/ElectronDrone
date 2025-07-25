@@ -1,0 +1,25 @@
+<launch>
+    <!-- 先加载参数, 不要忘了小数点和逗号，第一个时0.0, 0.0, 0.0，最后一个坐标是终点 -->
+    <rosparam param="targetpoints">[0.0, 0.0, 0.8,
+                                    0.0, 2.0, 0.8,
+                                    0.0, 0.0, 0.8,                                                                                                   
+                                    0.0, 0.0, 0.0,                                                  
+                                    0.0, 0.0, -1.0,                                                                          
+                                    ]</rosparam>
+    <!-- <rosparam param="targetpoints">[0.0, 0.0, 0.8,
+        3.0, -0.65, 0.8,                                                 
+        3.0, -0.65, 0.0,                                                  
+        3.0, -0.65, -1.0,                                                  
+                                                                       
+        ]</rosparam> -->
+
+    <!-- 添加hang和hang_time参数 -->
+    <param name="hang" type="bool" value="true"/>
+    <rosparam param="hang_time">[0.0, 3.0, 3.0]</rosparam>
+
+    <!-- 启动节点 -->  
+    <node name="offboard_run_node" pkg="offboard_run" type="offboard_run_node" output="screen"/>
+    <node name="ctrl" pkg="tournal23" type="ctrl" output="screen"/>
+    <!-- <node name="analyse_fire_center" pkg="tournal23" type="analyse_fire_center.py" output="screen"/> -->
+    <!-- <node name="tcp_server" pkg="tournal24" type="tcp_server.py" output="screen"/> -->
+</launch>

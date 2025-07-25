@@ -1,7 +1,13 @@
 <launch>
     <!-- 先加载参数, 不要忘了小数点和逗号，第一个时0.0, 0.0, 0.0，最后一个坐标是终点 -->
-    <rosparam param="targetpoints">[0.0, 0.0, 0.5,
-                                    0.0, 0.0,-0.5
+    <rosparam param="targetpoints">[0.0, 0.0, 0.8,
+                                    3.0, -0.65, 0.8,
+                                    2.65, -2.50, 0.8,
+                                    2.65, -3.60, 0.8,                             
+                                    1.35, -3.65, 0.8,                             
+                                    1.15, -0.60, 0.8,                             
+                                    1.15, -0.60, 0.0,                                                  
+                                    1.15, -0.60, -1.0,                                                                          
                                     ]</rosparam>
 
     <!-- 添加hang和hang_time参数 -->
@@ -12,5 +18,5 @@
     <node name="offboard_run_node" pkg="offboard_run" type="offboard_run_node" output="screen"/>
     <node name="ctrl" pkg="tournal24" type="ctrl" output="screen"/>
     <node name="analyse_qr" pkg="tournal24" type="analyse_qr.py" output="screen"/>
-    <node name="tcp_server" pkg="tournal24" type="tcp_server.py" output="screen"/>
+    <!-- <node name="tcp_server" pkg="tournal24" type="tcp_server.py" output="screen"/> -->
 </launch>
