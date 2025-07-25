@@ -21,7 +21,7 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 
 class ActionExecutor {
-public:
+ public:
   ActionExecutor(ros::NodeHandle &nh, tf2_ros::Buffer &tf_buffer)
       : nh_(nh), tf_buffer_(tf_buffer) {
     // 初始化发布器
@@ -106,7 +106,7 @@ public:
     Eigen::Quaterniond q_current = Eigen::Quaterniond(
         current_pose_.pose.orientation.w, current_pose_.pose.orientation.x,
         current_pose_.pose.orientation.y, current_pose_.pose.orientation.z);
-    enu_vec = q_current * body_vec; // 转到ENU
+    enu_vec = q_current * body_vec;  // 转到ENU
     // ROS_INFO("ENU vector: [%f, %f, %f]", enu_vec.x(), enu_vec.y(),
     // enu_vec.z()); Eigen::Vector3d ned_vec(enu_vec.y(), enu_vec.x(),
     // -enu_vec.z());
@@ -153,21 +153,21 @@ public:
   // 执行单个动作
   void executeAction(std::shared_ptr<DroneAction> action) {
     switch (action->getType()) {
-    case ActionType::MOVE_TO_POSITION:
-      executeMoveToPosition(action);
-      break;
-    case ActionType::HOVER:
-      executeHover(action);
-      break;
-    case ActionType::CAMERA_AIM:
-      executeCameraAim(action);
-      break;
-    case ActionType::LAND:
-      executeLand(action);
-      break;
-    case ActionType::TAKEOFF:
-      executeTakeoff(action);
-      break;
+      case ActionType::MOVE_TO_POSITION:
+        executeMoveToPosition(action);
+        break;
+      case ActionType::HOVER:
+        executeHover(action);
+        break;
+      case ActionType::CAMERA_AIM:
+        executeCameraAim(action);
+        break;
+      case ActionType::LAND:
+        executeLand(action);
+        break;
+      case ActionType::TAKEOFF:
+        executeTakeoff(action);
+        break;
     }
   }
 
@@ -181,12 +181,12 @@ public:
       dummy_pose.pose.position.x = 0.0;
       dummy_pose.pose.position.y = 0.0;
       dummy_pose.pose.position.z = 0.0;
-      dummy_pose.pose.orientation.w = 1.0; // 无旋转
+      dummy_pose.pose.orientation.w = 1.0;  // 无旋转
       sendPositionSetpoint(dummy_pose);
     }
   }
 
-private:
+ private:
   // 执行移动到位置
   void executeMoveToPosition(std::shared_ptr<DroneAction> action) {
     geometry_msgs::PoseStamped target = action->getTargetPose();
@@ -338,7 +338,7 @@ private:
     last_camera_aim_time_ = ros::Time::now();
   }
 
-private:
+ private:
   ros::NodeHandle &nh_;
   tf2_ros::Buffer &tf_buffer_;
 
@@ -367,6 +367,6 @@ private:
   // 动作队列
   std::queue<std::shared_ptr<DroneAction>> action_queue_;
   std::shared_ptr<DroneAction> current_action_;
-  geometry_msgs::PoseStamped finish_pose_; // 完成上一动作时的pose，用于hover
+  geometry_msgs::PoseStamped finish_pose_;  // 完成上一动作时的pose，用于hover
   int action_id_ = 0;
 };

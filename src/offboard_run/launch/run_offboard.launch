@@ -5,6 +5,7 @@
   </include> -->
   
   <arg name="pub_world_pose" default="false" />
+  <arg name="reset_px4_aft_failure" default="false" />
   <arg name="mission_config" default="$(find offboard_run)/config/simple.yaml" />
 
   <!-- 加载任务配置 -->
@@ -16,5 +17,7 @@
   </node>
 
   <!-- 任务执行节点 -->
-  <node name="execute_action_node" pkg="offboard_run" type="execute_action_node" output="screen" />
+  <node name="execute_action_node" pkg="offboard_run" type="execute_action_node" output="screen">
+    <param name="reset_px4_aft_failure" value="$(arg reset_px4_aft_failure)" />
+  </node>
 </launch>
