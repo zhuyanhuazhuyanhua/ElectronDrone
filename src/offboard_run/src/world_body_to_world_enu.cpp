@@ -11,9 +11,11 @@
 #include "ros/init.h"
 #include "ros/node_handle.h"
 #include "ros/publisher.h"
+#include "ros/service_server.h"
 #include "ros/subscriber.h"
 #include "ros/timer.h"
 #include "std_msgs/Bool.h"
+#include "std_srvs/Empty.h"  // 添加空服务类型
 
 #define DONT_NEED_ARM
 
@@ -23,11 +25,18 @@ class Body2ENU {
       : tf_buffer_(), tf_listener_(tf_buffer_, nh), static_tf_broadcaster_() {
     nh.param("pub_world_pose", pub_world_pose_, false);
     ROS_INFO("Publish world pose: %s", pub_world_pose_ ? "true" : "false");
+
     // 初始化发布器
     tf_status_pub_ = nh.advertise<std_msgs::Bool>("/mavros_tf_status", 10);
     px4_pose_sub_ = nh.subscribe<geometry_msgs::PoseStamped>(
         "/mavros/local_position/pose", 10,
         std::bind(&Body2ENU::px4_pose_cb, this, std::placeholders::_1));
+
+    // 添加重置服务
+    reset_server_ = nh.advertiseService(
+        "/reset_world_tf", &Body2ENU::resetTransformCallback, this);
+    ROS_INFO("Reset transform service available at: /reset_world_tf");
+
 #ifndef DONT_NEED_ARM
     mavros_state_sub_ = nh.subscribe<mavros_msgs::State>(
         "/mavros/state", 10,
@@ -35,7 +44,7 @@ class Body2ENU {
 #else
     init_timer_ =
         nh.createTimer(ros::Duration(0.5), [this](const ros::TimerEvent &) {
-          if (slid_window_avg.getSize() >= 10 && !tf_ready_) {
+          if (slid_window_avg.getSize() >= slid_size && !tf_ready_) {
             InitializeTransform();
             ROS_INFO("Initialized transform from world_enu to world_body");
             static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
@@ -52,10 +61,7 @@ class Body2ENU {
 
     tf_cast_timer_ =
         nh.createTimer(ros::Duration(0.1), [this](const ros::TimerEvent &) {
-          if (tf_ready_) {
-            static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
-            ROS_INFO("Published static transform from world_enu to world_body");
-          }
+          init();
           std_msgs::Bool tf_status_msg;
           tf_status_msg.data = tf_ready_;
           tf_status_pub_.publish(tf_status_msg);
@@ -63,16 +69,19 @@ class Body2ENU {
   }
 
  private:
+  static constexpr int slid_size = 10;
   ros::Publisher tf_status_pub_;
   ros::Publisher current_world_body_pos_pub_;
   ros::Subscriber px4_pose_sub_;
   ros::Subscriber mavros_state_sub_;
+  ros::ServiceServer reset_server_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
   tf2_ros::StaticTransformBroadcaster static_tf_broadcaster_;
   geometry_msgs::TransformStamped world_enu_to_world_body_;
   bool tf_ready_ = false;
-  SlidingWindowPoseAverage slid_window_avg = SlidingWindowPoseAverage(10);
+  SlidingWindowPoseAverage slid_window_avg =
+      SlidingWindowPoseAverage(slid_size);
   geometry_msgs::PoseStamped current_pose_;
   mavros_msgs::State current_state_;
   bool received_pose_ = false;
@@ -82,6 +91,33 @@ class Body2ENU {
   ros::Timer init_timer_;
 #endif
   ros::Timer tf_cast_timer_;
+
+  // 重置服务回调函数
+  bool resetTransformCallback(std_srvs::Empty::Request &req,
+                              std_srvs::Empty::Response &res) {
+    ROS_INFO("Reset transform service called");
+
+    // 重置tf状态
+    tf_ready_ = false;
+
+    // 清空滑动窗口
+    slid_window_avg.clear();
+    ROS_INFO("Sliding window cleared");
+
+    // 重新启动初始化定时器（如果使用DONT_NEED_ARM模式）
+#ifdef DONT_NEED_ARM
+    if (init_timer_.hasStarted()) {
+      init_timer_.stop();
+    }
+    init_timer_.start();
+    ROS_INFO("Restarted initialization timer");
+#endif
+
+    ROS_INFO(
+        "Transform reset completed. Waiting for new pose data to "
+        "reinitialize...");
+    return true;
+  }
 
   void px4_pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg) {
     // 更新当前位姿
@@ -102,6 +138,15 @@ class Body2ENU {
           ROS_WARN("Transform local pos failed: %s", ex.what());
         }
       }
+    }
+  }
+
+  void init() {
+    if (slid_window_avg.getSize() >= slid_size && !tf_ready_) {
+      InitializeTransform();
+      ROS_INFO("Initialized transform from world_enu to world_body");
+      static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
+      tf_ready_ = true;
     }
   }
 
@@ -140,7 +185,6 @@ class Body2ENU {
         start_local_body.pose.position.z;
     world_enu_to_world_body_.transform.rotation =
         start_local_body.pose.orientation;
-    // static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
 
     ROS_INFO("Initialized body to world_enu transform");
     tf_ready_ = true;

@@ -8,6 +8,16 @@ class SlidingWindowPoseAverage {
  public:
   SlidingWindowPoseAverage(int windowSize) : windowSize(windowSize) {}
 
+  void clear() {
+    std::queue<geometry_msgs::PoseStamped> empty;
+    std::swap(poseQueue, empty);
+    sumPositionX = 0.0;
+    sumPositionY = 0.0;
+    sumPositionZ = 0.0;
+    sumQuaternion = Eigen::Quaterniond::Identity();
+    quaternionCount = 0;
+  }
+
   void addPose(const geometry_msgs::PoseStamped& newPose) {
     if (!poseQueue.empty() &&
         exceedsResetThreshold(newPose, poseQueue.back())) {
