@@ -1,45 +1,12 @@
 # Mission configuration
 mission:
   # 起飞高度
-  takeoff_altitude: 1.2
+  takeoff_altitude: 0.5
   
   # 任务序列
   actions:
     - type: "takeoff"
-      altitude: 0.8
-      
-    - type: "move"
-      position: [1.0, 0.0, 0.8]
-      yaw: 0.0
-      frame: "world_body"
-      tolerance: 0.1
-
-    - type: "move"
-      position: [1.0, -1.0, 0.8]
-      yaw: 0.0
-      frame: "world_body"
-      tolerance: 0.1
-    
-    - type: "move"
-      position: [0.0, -1.0, 0.8]
-      yaw: 0.0
-      frame: "world_body"
-      tolerance: 0.1
-
-    - type: "move"
-      position: [0.0, 0.0, 0.8]
-      yaw: 0.0
-      frame: "world_body"
-      tolerance: 0.1
-
-    - type: "hover"
-      duration: 3.0
-      
-    # - type: "camera_aim"
-    #   position: [0.0, 2.0, 1.5]
-    #   yaw: 0.0
-    #   frame: "world_body"
-    #   tolerance: 10.0  # 像素
+      altitude: 0.5
       
     - type: "land"
 

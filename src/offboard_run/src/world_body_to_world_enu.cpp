@@ -15,7 +15,7 @@
 #include "ros/timer.h"
 #include "std_msgs/Bool.h"
 class Body2ENU {
- public:
+public:
   Body2ENU(ros::NodeHandle &nh)
       : tf_buffer_(), tf_listener_(tf_buffer_, nh), static_tf_broadcaster_() {
     nh.param("pub_world_pose", pub_world_pose_, false);
@@ -46,7 +46,7 @@ class Body2ENU {
         });
   }
 
- private:
+private:
   ros::Publisher tf_status_pub_;
   ros::Publisher current_world_body_pos_pub_;
   ros::Subscriber px4_pose_sub_;
@@ -89,13 +89,15 @@ class Body2ENU {
   void state_cb(const mavros_msgs::State::ConstPtr &msg) {
     current_state_ = *msg;
 
-    if (msg->armed && msg->mode == "OFFBOARD") {
+    if (msg->armed) {
       // 如果处于OFFBOARD模式且已解锁，初始化坐标变换
       if (!tf_ready_) {
         InitializeTransform();
         ROS_INFO("Initialized transform from world_enu to world_body");
         static_tf_broadcaster_.sendTransform(world_enu_to_world_body_);
       }
+    } else {
+      ROS_ERROR("Drone is not armed, cannot initialize transform");
     }
   }
 

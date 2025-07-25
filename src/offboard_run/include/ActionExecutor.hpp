@@ -171,6 +171,21 @@ public:
     }
   }
 
+  void sendDummyPose() {
+    if (current_pose_received_) {
+      sendPositionSetpoint(current_pose_);
+    } else {
+      geometry_msgs::PoseStamped dummy_pose;
+      dummy_pose.header.frame_id = "world_enu";
+      dummy_pose.header.stamp = ros::Time::now();
+      dummy_pose.pose.position.x = 0.0;
+      dummy_pose.pose.position.y = 0.0;
+      dummy_pose.pose.position.z = 0.0;
+      dummy_pose.pose.orientation.w = 1.0; // 无旋转
+      sendPositionSetpoint(dummy_pose);
+    }
+  }
+
 private:
   // 执行移动到位置
   void executeMoveToPosition(std::shared_ptr<DroneAction> action) {
@@ -226,7 +241,6 @@ private:
     // 检查相机数据是否有效
     if (ros::Time::now() - last_camera_aim_time_ > ros::Duration(0.5)) {
       // 相机数据超时，执行普通位置控制
-      // TODO 检查逻辑
       ROS_WARN("Camera aim data timeout, executing position control!");
       executeMoveToPosition(action);
       return;
@@ -271,7 +285,7 @@ private:
     vel_cmd.velocity.x = ned_velocity.x();
     vel_cmd.velocity.y = ned_velocity.y();
     vel_cmd.velocity.z = ned_velocity.z();
-    ROS_WARN("Camera aim velocity: [%f, %f, %f]", vel_cmd.velocity.x,
+    ROS_INFO("Camera aim velocity: [%f, %f, %f]", vel_cmd.velocity.x,
              vel_cmd.velocity.y, vel_cmd.velocity.z);
 
     setpoint_pub_.publish(vel_cmd);

@@ -68,11 +68,16 @@ public:
   void controlLoop() {
     if (!action_executor_) {
       ROS_WARN("ActionExecutor not initialized, skipping control loop.");
+      // send a dummy position setpoint to avoid blocking
+      action_executor_->sendDummyPose();
       return;
     }
 
     if (!mission_running_) {
       ROS_WARN("Mission not running, skipping control loop.");
+      ROS_INFO("Current state: initialized: %s, tf_ready: %s, connected: %s",
+               initialized_ ? "true" : "false", tf_ready_ ? "true" : "false",
+               current_state_.connected ? "true" : "false");
       return;
     }
     action_executor_->controlLoop();
@@ -218,7 +223,7 @@ private:
             offb_set_mode.response.mode_sent) {
           ROS_INFO("Offboard mode enabled");
         } else {
-          ROS_WARN("Failed to set Offboard mode");
+          ROS_ERROR("Failed to set Offboard mode");
         }
       }
       // 解锁
@@ -235,12 +240,16 @@ private:
             // 如果配置为自动开始任务
             if (auto_start_mission_) {
               ROS_INFO("Mission started automatically");
-              startMission();
+              if (!startMission()) {
+                start_mission_timer_ =
+                    nh_.createTimer(ros::Duration(0.1),
+                                    &MissionController::startMissionCB, this);
+              }
             } else {
               ROS_INFO("Waiting for mission start command...");
             }
           } else {
-            ROS_WARN("Failed to arm vehicle");
+            ROS_ERROR("Failed to arm vehicle");
           }
         } else {
           ROS_ERROR("Arming service call failed");
@@ -249,27 +258,36 @@ private:
     }
   }
 
-  void startMission() {
+  void startMissionCB(const ros::TimerEvent &event) {
+    if (startMission()) {
+      start_mission_timer_.stop();
+      ROS_INFO("Mission started successfully");
+    } else {
+      ROS_ERROR("Failed to start mission");
+    }
+  }
+
+  bool startMission() {
     ROS_INFO("Starting mission...");
-    std::cout << "Starting mission..." << std::endl;
     if (!initialized_) {
       ROS_WARN("Cannot start mission: system not initialized");
-      return;
+      return false;
     }
 
     if (mission_actions_.empty()) {
       ROS_WARN("Cannot start mission: no actions loaded");
-      return;
+      return false;
     }
 
     if (!tf_ready_) {
       ROS_WARN("Waiting for TF to be ready before starting mission");
+      return false;
     }
 
-    while (ros::ok() && !tf_ready_) {
-      ros::Duration(0.05).sleep();
-      ros::spinOnce();
-    }
+    // while (ros::ok() && !tf_ready_) {
+    //   ros::Duration(0.05).sleep();
+    //   ros::spinOnce();
+    // }
 
     ROS_INFO("Starting mission with %zu actions", mission_actions_.size());
 
@@ -280,6 +298,7 @@ private:
     }
 
     mission_running_ = true;
+    return true;
   }
 
   void stopMission() {
@@ -328,6 +347,7 @@ private:
 
   // 定时器
   ros::Timer init_timer_;
+  ros::Timer start_mission_timer_;
 
   // 动作执行器
   std::unique_ptr<ActionExecutor> action_executor_;
