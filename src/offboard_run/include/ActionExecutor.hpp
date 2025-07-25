@@ -21,8 +21,8 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 
 class ActionExecutor {
- public:
-  ActionExecutor(ros::NodeHandle& nh, tf2_ros::Buffer& tf_buffer)
+public:
+  ActionExecutor(ros::NodeHandle &nh, tf2_ros::Buffer &tf_buffer)
       : nh_(nh), tf_buffer_(tf_buffer) {
     // 初始化发布器
     setpoint_pub_ = nh_.advertise<mavros_msgs::PositionTarget>(
@@ -46,8 +46,9 @@ class ActionExecutor {
         nh_.serviceClient<mavros_msgs::CommandTOL>("/mavros/cmd/land");
 
     // 初始化定时器
-    control_timer_ = nh_.createTimer(
-        ros::Duration(0.02), &ActionExecutor::controlLoop, this);  // 50Hz
+    // control_timer_ = nh_.createTimer(
+    //     ros::Duration(0.02), &ActionExecutor::controlLoop, this); // 50Hz
+    ROS_INFO("ActionExecutor initialized, ready to execute actions.");
   }
 
   // 添加动作到队列
@@ -74,7 +75,7 @@ class ActionExecutor {
   }
 
   // 发送位置设定点
-  void sendPositionSetpoint(const geometry_msgs::PoseStamped& pose) {
+  void sendPositionSetpoint(const geometry_msgs::PoseStamped &pose) {
     mavros_msgs::PositionTarget pos_target;
     pos_target.header = pose.header;
     pos_target.header.stamp = ros::Time::now();
@@ -99,24 +100,27 @@ class ActionExecutor {
     setpoint_pub_.publish(pos_target);
   }
 
-  Eigen::Vector3d BodyVelocity2NED(const Eigen::Vector3d& body_vec) {
+  Eigen::Vector3d BodyVelocity2NED(const Eigen::Vector3d &body_vec) {
     // 将机体坐标系下的速度转换为NED坐标系
     Eigen::Vector3d enu_vec;
     Eigen::Quaterniond q_current = Eigen::Quaterniond(
         current_pose_.pose.orientation.w, current_pose_.pose.orientation.x,
         current_pose_.pose.orientation.y, current_pose_.pose.orientation.z);
-    enu_vec = q_current * body_vec;  // 转到ENU
+    enu_vec = q_current * body_vec; // 转到ENU
     Eigen::Vector3d ned_vec(enu_vec.y(), enu_vec.x(), -enu_vec.z());
     return ned_vec;
   }
 
- private:
   // 主控制循环
-  void controlLoop(const ros::TimerEvent& event) {
+  void controlLoop() {
+    std::cout << "Executing control loop, action ID: " << action_id_
+              << std::endl;
     // 检查是否连接并解锁
     if (!current_state_.connected || !current_state_.armed) {
       return;
+      ROS_WARN("Drone not connected or not armed, skipping control loop.");
     }
+    ROS_INFO("Executing control loop, action ID: %d", action_id_);
 
     std_msgs::String step_msg;
     step_msg.data = std::to_string(action_id_);
@@ -147,24 +151,25 @@ class ActionExecutor {
   // 执行单个动作
   void executeAction(std::shared_ptr<DroneAction> action) {
     switch (action->getType()) {
-      case ActionType::MOVE_TO_POSITION:
-        executeMoveToPosition(action);
-        break;
-      case ActionType::HOVER:
-        executeHover(action);
-        break;
-      case ActionType::CAMERA_AIM:
-        executeCameraAim(action);
-        break;
-      case ActionType::LAND:
-        executeLand(action);
-        break;
-      case ActionType::TAKEOFF:
-        executeTakeoff(action);
-        break;
+    case ActionType::MOVE_TO_POSITION:
+      executeMoveToPosition(action);
+      break;
+    case ActionType::HOVER:
+      executeHover(action);
+      break;
+    case ActionType::CAMERA_AIM:
+      executeCameraAim(action);
+      break;
+    case ActionType::LAND:
+      executeLand(action);
+      break;
+    case ActionType::TAKEOFF:
+      executeTakeoff(action);
+      break;
     }
   }
 
+private:
   // 执行移动到位置
   void executeMoveToPosition(std::shared_ptr<DroneAction> action) {
     geometry_msgs::PoseStamped target = action->getTargetPose();
@@ -173,7 +178,7 @@ class ActionExecutor {
     if (action->useBodyFrame()) {
       try {
         target = tf_buffer_.transform(target, "world_enu", ros::Duration(0.1));
-      } catch (tf2::TransformException& ex) {
+      } catch (tf2::TransformException &ex) {
         ROS_WARN("Transform failed: %s", ex.what());
         return;
       }
@@ -188,6 +193,7 @@ class ActionExecutor {
       if (aim_close_count_ > 20) {
         action->setStatus(ActionStatus::COMPLETED);
         current_action_.reset();
+        finish_pose_ = current_pose_;
         ROS_INFO("Reached target position");
         aim_close_count_ = 0;
       }
@@ -200,14 +206,15 @@ class ActionExecutor {
 
   // 执行悬停
   void executeHover(std::shared_ptr<DroneAction> action) {
-    // 保持当前位置
-    sendPositionSetpoint(current_pose_);
+    // 保持上个动作结束位置
+    sendPositionSetpoint(finish_pose_);
 
     // 检查悬停时间
     if ((ros::Time::now() - action->getStartTime()).toSec() >
         action->getHoverTime()) {
       action->setStatus(ActionStatus::COMPLETED);
       current_action_.reset();
+      finish_pose_ = current_pose_;
       ROS_INFO("Hover completed");
     }
   }
@@ -229,6 +236,7 @@ class ActionExecutor {
       if (aim_close_count_ > 20) {
         action->setStatus(ActionStatus::COMPLETED);
         current_action_.reset();
+        finish_pose_ = current_pose_;
         ROS_INFO("Camera aim completed");
         aim_close_count_ = 0;
       }
@@ -273,6 +281,7 @@ class ActionExecutor {
     if (set_mode_client_.call(land_mode) && land_mode.response.mode_sent) {
       action->setStatus(ActionStatus::COMPLETED);
       current_action_.reset();
+      finish_pose_ = current_pose_;
       ROS_INFO("Landing initiated");
     }
   }
@@ -288,6 +297,7 @@ class ActionExecutor {
     if (std::abs(current.z - target.z) < action->getPositionTolerance()) {
       action->setStatus(ActionStatus::COMPLETED);
       current_action_.reset();
+      finish_pose_ = current_pose_;
       ROS_INFO("Takeoff completed");
     } else {
       sendPositionSetpoint(takeoff_pose);
@@ -295,23 +305,23 @@ class ActionExecutor {
   }
 
   // 回调函数
-  void stateCb(const mavros_msgs::State::ConstPtr& msg) {
+  void stateCb(const mavros_msgs::State::ConstPtr &msg) {
     current_state_ = *msg;
   }
 
-  void poseCb(const geometry_msgs::PoseStamped::ConstPtr& msg) {
+  void poseCb(const geometry_msgs::PoseStamped::ConstPtr &msg) {
     current_pose_ = *msg;
     current_pose_received_ = true;
   }
 
-  void cameraAimCb(const geometry_msgs::Point::ConstPtr& msg) {
+  void cameraAimCb(const geometry_msgs::Point::ConstPtr &msg) {
     camera_aim_diff_ = *msg;
     last_camera_aim_time_ = ros::Time::now();
   }
 
- private:
-  ros::NodeHandle& nh_;
-  tf2_ros::Buffer& tf_buffer_;
+private:
+  ros::NodeHandle &nh_;
+  tf2_ros::Buffer &tf_buffer_;
 
   // 发布器和订阅器
   ros::Publisher setpoint_pub_;
@@ -338,5 +348,6 @@ class ActionExecutor {
   // 动作队列
   std::queue<std::shared_ptr<DroneAction>> action_queue_;
   std::shared_ptr<DroneAction> current_action_;
+  geometry_msgs::PoseStamped finish_pose_; // 完成上一动作时的pose，用于hover
   int action_id_ = 0;
 };

@@ -17,8 +17,8 @@
 #include "tf2/LinearMath/Quaternion.h"
 
 class MissionController {
- public:
-  MissionController(ros::NodeHandle& nh) : nh_(nh), tf_listener_(tf_buffer_) {
+public:
+  MissionController(ros::NodeHandle &nh) : nh_(nh), tf_listener_(tf_buffer_) {
     // 系统参数
     nh.param("system/use_camera_aim", use_camera_aim_, false);
     nh.param("system/auto_start_mission", auto_start_mission_, true);
@@ -59,13 +59,26 @@ class MissionController {
     }
 
     // 初始化定时器
-    init_timer_ = nh_.createTimer(ros::Duration(1.0),
+    init_timer_ = nh_.createTimer(ros::Duration(1.5),
                                   &MissionController::initCallback, this);
 
     ROS_INFO("Mission controller started!");
   }
 
- private:
+  void controlLoop() {
+    if (!action_executor_) {
+      ROS_WARN("ActionExecutor not initialized, skipping control loop.");
+      return;
+    }
+
+    if (!mission_running_) {
+      ROS_WARN("Mission not running, skipping control loop.");
+      return;
+    }
+    action_executor_->controlLoop();
+  }
+
+private:
   bool loadMissionFromParam() {
     XmlRpc::XmlRpcValue mission_config;
     if (!nh_.getParam("mission/actions", mission_config)) {
@@ -167,8 +180,14 @@ class MissionController {
     return !mission_actions_.empty();
   }
 
-  void initCallback(const ros::TimerEvent& event) {
-    if (!initialized_ && tf_ready_ && current_state_.connected) {
+  void initCallback(const ros::TimerEvent &event) {
+    ROS_INFO(
+        "Initializing mission controller to control drone..., auto_start: %s",
+        auto_start_mission_ ? "true" : "false");
+    ROS_INFO("Now status is initialized: %s, tf_ready: %s, connected: %s",
+             initialized_ ? "true" : "false", tf_ready_ ? "true" : "false",
+             current_state_.connected ? "true" : "false");
+    if (!initialized_ && current_state_.connected) {
       // 发送初始设定点
       if (!initial_setpoints_sent_) {
         ROS_INFO("Sending initial setpoints...");
@@ -215,6 +234,7 @@ class MissionController {
 
             // 如果配置为自动开始任务
             if (auto_start_mission_) {
+              ROS_INFO("Mission started automatically");
               startMission();
             } else {
               ROS_INFO("Waiting for mission start command...");
@@ -230,6 +250,8 @@ class MissionController {
   }
 
   void startMission() {
+    ROS_INFO("Starting mission...");
+    std::cout << "Starting mission..." << std::endl;
     if (!initialized_) {
       ROS_WARN("Cannot start mission: system not initialized");
       return;
@@ -253,7 +275,7 @@ class MissionController {
 
     // 清空当前队列并添加所有任务动作
     action_executor_->clearActions();
-    for (const auto& action : mission_actions_) {
+    for (const auto &action : mission_actions_) {
       action_executor_->addAction(action);
     }
 
@@ -267,7 +289,7 @@ class MissionController {
   }
 
   // 回调函数
-  void tfStatusCb(const std_msgs::Bool::ConstPtr& msg) {
+  void tfStatusCb(const std_msgs::Bool::ConstPtr &msg) {
     tf_ready_ = msg->data;
     if (tf_ready_ && !tf_ready_logged_) {
       ROS_INFO("TF is ready!");
@@ -275,22 +297,22 @@ class MissionController {
     }
   }
 
-  void stateCb(const mavros_msgs::State::ConstPtr& msg) {
+  void stateCb(const mavros_msgs::State::ConstPtr &msg) {
     current_state_ = *msg;
   }
 
-  void startMissionCb(const std_msgs::Empty::ConstPtr& msg) {
+  void startMissionCb(const std_msgs::Empty::ConstPtr &msg) {
     ROS_INFO("Received start mission command");
     startMission();
   }
 
-  void stopMissionCb(const std_msgs::Empty::ConstPtr& msg) {
+  void stopMissionCb(const std_msgs::Empty::ConstPtr &msg) {
     ROS_INFO("Received stop mission command");
     stopMission();
   }
 
- private:
-  ros::NodeHandle& nh_;
+private:
+  ros::NodeHandle &nh_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
 
@@ -325,14 +347,19 @@ class MissionController {
   mavros_msgs::State current_state_;
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   ros::init(argc, argv, "mission_controller_node");
   ros::NodeHandle nh;
 
   try {
     MissionController controller(nh);
-    ros::spin();
-  } catch (const std::exception& e) {
+    ros::Rate rate(50); // 50Hz 控制频率
+    while (ros::ok()) {
+      controller.controlLoop();
+      ros::spinOnce();
+      rate.sleep();
+    }
+  } catch (const std::exception &e) {
     ROS_ERROR("Exception: %s", e.what());
     return -1;
   }
