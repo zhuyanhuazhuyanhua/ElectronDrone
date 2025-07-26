@@ -323,15 +323,125 @@ private:
 
   // 执行降落
   void executeLand(std::shared_ptr<DroneAction> action) {
-    // 切换到降落模式
-    mavros_msgs::SetMode land_mode;
-    land_mode.request.custom_mode = "AUTO.LAND";
+    // 降落参数配置
+    static constexpr double APPROACH_SPEED = 0.5;   // 接近速度 m/s
+    static constexpr double FINAL_SPEED = 0.2;      // 最终降落速度 m/s
+    static constexpr double APPROACH_HEIGHT = 1.0;  // 开始减速的高度
+    static constexpr double TOUCHDOWN_HEIGHT = 0.4; // 触地判定高度
+    static constexpr double DISARM_HEIGHT = 0.2;    // 解锁高度
+    static constexpr int STABLE_COUNT_THRESHOLD =
+        10; // 稳定计数阈值（0.5秒@50Hz）
 
-    if (set_mode_client_.call(land_mode) && land_mode.response.mode_sent) {
-      action->setStatus(ActionStatus::COMPLETED);
-      current_action_.reset();
-      finish_pose_ = current_pose_;
-      ROS_INFO("Landing initiated");
+    // 初始化降落状态
+    if (!landing_state_.initialized) {
+      landing_state_.initialized = true;
+      landing_state_.start_pose = finish_pose_;
+      landing_state_.start_time = ros::Time::now();
+      landing_state_.ground_height = 0.0;
+      landing_state_.stable_count = 0;
+
+      ROS_INFO("OFFBOARD Landing initiated from height: %.2f m",
+               current_pose_.pose.position.z - landing_state_.ground_height);
+    }
+
+    // 计算当前高度（相对地面）
+    double current_height = current_pose_.pose.position.z;
+    double elapsed_time =
+        (ros::Time::now() - landing_state_.start_time).toSec();
+
+    // 准备降落位置指令
+    geometry_msgs::PoseStamped land_pose = current_pose_;
+
+    // 保持XY位置不变
+    land_pose.pose.position.x = landing_state_.start_pose.pose.position.x;
+    land_pose.pose.position.y = landing_state_.start_pose.pose.position.y;
+
+    // 最重要：保持yaw角不变
+    land_pose.pose.orientation = landing_state_.start_pose.pose.orientation;
+
+    // 根据高度决定降落阶段
+    if (current_height > APPROACH_HEIGHT) {
+      // 阶段1：快速接近
+      static constexpr double dt = 0.02; // 50Hz
+      land_pose.pose.position.z -= APPROACH_SPEED * dt;
+
+      ROS_INFO_THROTTLE(
+          1.0, "Landing Phase 1 - Approaching: height=%.2f m, speed=%.2f m/s",
+          current_height, APPROACH_SPEED);
+
+    } else if (current_height > TOUCHDOWN_HEIGHT) {
+      // 阶段2：减速降落
+      static constexpr double dt = 0.02; // 50Hz
+      land_pose.pose.position.z -= FINAL_SPEED * dt;
+
+      ROS_INFO_THROTTLE(
+          1.0,
+          "Landing Phase 2 - Final approach: height=%.2f m, speed=%.2f m/s",
+          current_height, FINAL_SPEED);
+
+    } else if (current_height > DISARM_HEIGHT) {
+      // 阶段3：触地阶段
+      land_pose.pose.position.z = landing_state_.ground_height;
+
+      // 检查是否落地
+      if (current_pose_.pose.position.z < 0.1) { // 10cm误差范围内认为稳定
+        landing_state_.stable_count++;
+      } else {
+        landing_state_.stable_count = 0;
+      }
+
+      ROS_INFO_THROTTLE(
+          0.5, "Landing Phase 3 - Touchdown: height=%.3f m, stable_count=%d/%d",
+          current_height, landing_state_.stable_count, STABLE_COUNT_THRESHOLD);
+
+    } else {
+      // 阶段4：已着陆，准备disarm
+      landing_state_.stable_count++;
+      land_pose.pose.position.z = landing_state_.ground_height;
+
+      if (landing_state_.stable_count >= STABLE_COUNT_THRESHOLD) {
+        // 尝试解锁
+        mavros_msgs::CommandBool disarm_cmd;
+        disarm_cmd.request.value = false; // false = 解锁
+
+        if (arming_client_.call(disarm_cmd)) {
+          if (disarm_cmd.response.success) {
+            ROS_INFO("Landing completed successfully! Vehicle disarmed.");
+            ROS_INFO("Total landing time: %.2f seconds", elapsed_time);
+
+            // 标记动作完成
+            action->setStatus(ActionStatus::COMPLETED);
+            current_action_.reset();
+            finish_pose_ = current_pose_;
+
+            // 重置降落状态
+            landing_state_.initialized = false;
+            landing_state_.stable_count = 0;
+          } else {
+            ROS_WARN("Disarm command failed, retrying...");
+          }
+        } else {
+          ROS_ERROR("Failed to call disarm service");
+        }
+      }
+    }
+
+    // 发送位置指令
+    sendPositionSetpoint(land_pose);
+
+    // 安全检查：超时保护
+    if (elapsed_time > 5.0) { // 5秒超时
+      ROS_ERROR("Landing timeout! Switching to AUTO.LAND for safety.");
+
+      // 切换到AUTO.LAND作为备份
+      mavros_msgs::SetMode land_mode;
+      land_mode.request.custom_mode = "AUTO.LAND";
+
+      if (set_mode_client_.call(land_mode) && land_mode.response.mode_sent) {
+        action->setStatus(ActionStatus::COMPLETED);
+        current_action_.reset();
+        landing_state_.initialized = false;
+      }
     }
   }
 
@@ -345,10 +455,10 @@ private:
       takeoff_pose = current_pose_;
     }
     takeoff_pose.pose.position.z = action->getTargetAltitude();
-    takeoff_pose.pose.orientation.x = 0.0;
-    takeoff_pose.pose.orientation.y = 0.0;
-    takeoff_pose.pose.orientation.z = 0.0;
-    takeoff_pose.pose.orientation.w = 1.0; // 无旋转
+    // takeoff_pose.pose.orientation.x = 0.0;
+    // takeoff_pose.pose.orientation.y = 0.0;
+    // takeoff_pose.pose.orientation.z = 0.0;
+    // takeoff_pose.pose.orientation.w = 1.0; // 无旋转
 
     ROS_INFO("Sending takeoff command : [%.2f, %.2f, %.2f]",
              takeoff_pose.pose.position.x, takeoff_pose.pose.position.y,
@@ -406,6 +516,15 @@ private:
   ros::Time last_camera_aim_time_;
   bool current_pose_received_ = false;
   int aim_close_count_ = 0;
+
+  //降落相关
+  struct LandingState {
+    bool initialized = false;
+    geometry_msgs::PoseStamped start_pose;
+    ros::Time start_time;
+    double ground_height = 0.0; // 地面高度
+    int stable_count = 0;       // 稳定计数器
+  } landing_state_;
 
   // 动作队列
   std::queue<std::shared_ptr<DroneAction>> action_queue_;
