@@ -93,6 +93,7 @@ class MissionController {
       ROS_INFO("Current state: initialized: %s, tf_ready: %s, connected: %s",
                initialized_ ? "true" : "false", tf_ready_ ? "true" : "false",
                current_state_.connected ? "true" : "false");
+      action_executor_->sendDummyPose();
       return;
     }
     action_executor_->controlLoop();
