@@ -109,10 +109,11 @@ public:
 
   // 起飞动作
   static std::shared_ptr<DroneAction>
-  createTakeoffAction(double target_altitude) {
+  createTakeoffAction(double target_altitude, double tolerance = 0.1) {
     auto action = std::make_shared<DroneAction>(PrivateTag{});
     action->type_ = ActionType::TAKEOFF;
     action->target_altitude_ = target_altitude;
+    action->position_tolerance_ = tolerance;
     return action;
   }
 
@@ -127,10 +128,30 @@ public:
   double getTargetAltitude() const { return target_altitude_; }
   ros::Time getStartTime() const { return start_time_; }
   HoldAxis getHoldAxis() const { return axis_; }
+  bool isStartPoseInitialized() const { return init_start_pose_; }
+  geometry_msgs::PoseStamped getStartPose() const {
+    return init_start_pose_ ? start_pose_ : geometry_msgs::PoseStamped();
+  }
 
   // Setters
   void setStatus(ActionStatus status) { status_ = status; }
   void setStartTime(ros::Time time) { start_time_ = time; }
+  void setStartPose(const geometry_msgs::PoseStamped &pose) {
+    start_pose_ = pose;
+    init_start_pose_ = true;
+  }
+
+  // 检查是否已完成
+  bool isCompleted() const { return status_ == ActionStatus::COMPLETED; }
+
+  // 检查是否正在执行
+  bool isExecuting() const { return status_ == ActionStatus::EXECUTING; }
+
+  // 检查是否失败
+  bool isFailed() const { return status_ == ActionStatus::FAILED; }
+
+  // 检查是否中止
+  bool isAborted() const { return status_ == ActionStatus::ABORTED; }
 
 private:
   ActionType type_;
@@ -143,6 +164,9 @@ private:
   double camera_aim_tolerance_ = 10.0; // 相机瞄准容差（像素）
   double target_altitude_ = 1.2;       // 目标高度
   HoldAxis axis_ = HoldAxis::Z;        // 保持的轴
+
+  geometry_msgs::PoseStamped start_pose_;
+  bool init_start_pose_ = false; // 是否已初始化起始位置
 
   ros::Time start_time_;
 };

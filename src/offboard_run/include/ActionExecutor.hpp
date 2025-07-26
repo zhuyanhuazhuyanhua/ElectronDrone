@@ -295,13 +295,13 @@ private:
 
     switch (action->getHoldAxis()) {
     case HoldAxis::X:
-      camera_aim_vector.x() = action->getTargetPose().pose.position.x;
+      target_pose.pose.position.x = action->getTargetPose().pose.position.x;
       break;
     case HoldAxis::Y:
-      camera_aim_vector.y() = action->getTargetPose().pose.position.y;
+      target_pose.pose.position.y = action->getTargetPose().pose.position.y;
       break;
     case HoldAxis::Z:
-      camera_aim_vector.z() = action->getTargetPose().pose.position.z;
+      target_pose.pose.position.z = action->getTargetPose().pose.position.z;
       break;
     default:
       break;
@@ -337,9 +337,13 @@ private:
 
   // 执行起飞
   void executeTakeoff(std::shared_ptr<DroneAction> action) {
-    geometry_msgs::PoseStamped takeoff_pose = current_pose_;
-    takeoff_pose.pose.position.x = 0.0;
-    takeoff_pose.pose.position.y = 0.0;
+    geometry_msgs::PoseStamped takeoff_pose;
+    if (action->isStartPoseInitialized()) {
+      takeoff_pose = action->getStartPose();
+    } else {
+      action->setStartPose(current_pose_);
+      takeoff_pose = current_pose_;
+    }
     takeoff_pose.pose.position.z = action->getTargetAltitude();
     takeoff_pose.pose.orientation.x = 0.0;
     takeoff_pose.pose.orientation.y = 0.0;

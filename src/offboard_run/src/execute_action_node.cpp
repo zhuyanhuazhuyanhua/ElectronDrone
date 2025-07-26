@@ -135,7 +135,7 @@ private:
 
       if (type == "takeoff") {
         double altitude = mission_config[i]["altitude"];
-        action = DroneAction::createTakeoffAction(altitude);
+        action = DroneAction::createTakeoffAction(altitude, 0.15);
         ROS_INFO("  Action %d: Takeoff to %.2f m", i, altitude);
 
       } else if (type == "land") {
