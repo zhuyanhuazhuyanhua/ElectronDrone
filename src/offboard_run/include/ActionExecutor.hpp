@@ -21,7 +21,7 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 
 class ActionExecutor {
- public:
+public:
   ActionExecutor(ros::NodeHandle &nh, tf2_ros::Buffer &tf_buffer)
       : nh_(nh), tf_buffer_(tf_buffer) {
     // 初始化发布器
@@ -106,7 +106,7 @@ class ActionExecutor {
     Eigen::Quaterniond q_current = Eigen::Quaterniond(
         current_pose_.pose.orientation.w, current_pose_.pose.orientation.x,
         current_pose_.pose.orientation.y, current_pose_.pose.orientation.z);
-    enu_vec = q_current * body_vec;  // 转到ENU
+    enu_vec = q_current * body_vec; // 转到ENU
     // ROS_INFO("ENU vector: [%f, %f, %f]", enu_vec.x(), enu_vec.y(),
     // enu_vec.z()); Eigen::Vector3d ned_vec(enu_vec.y(), enu_vec.x(),
     // -enu_vec.z());
@@ -153,21 +153,21 @@ class ActionExecutor {
   // 执行单个动作
   void executeAction(std::shared_ptr<DroneAction> action) {
     switch (action->getType()) {
-      case ActionType::MOVE_TO_POSITION:
-        executeMoveToPosition(action);
-        break;
-      case ActionType::HOVER:
-        executeHover(action);
-        break;
-      case ActionType::CAMERA_AIM:
-        executeCameraAim(action);
-        break;
-      case ActionType::LAND:
-        executeLand(action);
-        break;
-      case ActionType::TAKEOFF:
-        executeTakeoff(action);
-        break;
+    case ActionType::MOVE_TO_POSITION:
+      executeMoveToPosition(action);
+      break;
+    case ActionType::HOVER:
+      executeHover(action);
+      break;
+    case ActionType::CAMERA_AIM:
+      executeCameraAim(action);
+      break;
+    case ActionType::LAND:
+      executeLand(action);
+      break;
+    case ActionType::TAKEOFF:
+      executeTakeoff(action);
+      break;
     }
   }
 
@@ -181,12 +181,12 @@ class ActionExecutor {
       dummy_pose.pose.position.x = 0.0;
       dummy_pose.pose.position.y = 0.0;
       dummy_pose.pose.position.z = 0.0;
-      dummy_pose.pose.orientation.w = 1.0;  // 无旋转
+      dummy_pose.pose.orientation.w = 1.0; // 无旋转
       sendPositionSetpoint(dummy_pose);
     }
   }
 
- private:
+private:
   // 执行移动到位置
   void executeMoveToPosition(std::shared_ptr<DroneAction> action) {
     geometry_msgs::PoseStamped target = action->getTargetPose();
@@ -241,6 +241,7 @@ class ActionExecutor {
     // 检查相机数据是否有效
     if (ros::Time::now() - last_camera_aim_time_ > ros::Duration(0.5)) {
       // 相机数据超时，执行普通位置控制
+      // TODO 添加超时多次退出
       ROS_WARN("Camera aim data timeout, executing position control!");
       executeMoveToPosition(action);
       return;
@@ -263,30 +264,59 @@ class ActionExecutor {
 
     Eigen::Vector3d camera_aim_vector{camera_aim_diff_.x, camera_aim_diff_.y,
                                       camera_aim_diff_.z};
+
     ROS_INFO("Camera aim vector: [%f, %f, %f]", camera_aim_vector.x(),
              camera_aim_vector.y(), camera_aim_vector.z());
 
     // 发送速度控制指令进行对准
     mavros_msgs::PositionTarget vel_cmd;
-    static const double P_gain = 0.001;
-    Eigen::Vector3d ned_velocity = BodyVelocity2ENU(camera_aim_vector * P_gain);
-    vel_cmd.header.stamp = ros::Time::now();
-    vel_cmd.header.frame_id = "world_enu";
-    vel_cmd.coordinate_frame = mavros_msgs::PositionTarget::FRAME_BODY_NED;
-    vel_cmd.type_mask = mavros_msgs::PositionTarget::IGNORE_PX |
-                        mavros_msgs::PositionTarget::IGNORE_PY |
-                        mavros_msgs::PositionTarget::IGNORE_PZ |
-                        mavros_msgs::PositionTarget::IGNORE_AFX |
-                        mavros_msgs::PositionTarget::IGNORE_AFY |
-                        mavros_msgs::PositionTarget::IGNORE_AFZ |
-                        mavros_msgs::PositionTarget::IGNORE_YAW;
+    static constexpr double P_gain = 0.001;
+    static constexpr double MAX_STEP = 0.1; // 最大单步移动距离（米）
 
-    // P控制器
-    vel_cmd.velocity.x = ned_velocity.x();
-    vel_cmd.velocity.y = ned_velocity.y();
-    vel_cmd.velocity.z = ned_velocity.z();
-    ROS_INFO("Camera aim velocity: [%f, %f, %f]", vel_cmd.velocity.x,
-             vel_cmd.velocity.y, vel_cmd.velocity.z);
+    // 计算机体坐标系下的位置增量
+    Eigen::Vector3d body_position_delta = camera_aim_vector * P_gain;
+
+    // 限制最大移动步长
+    for (int i = 0; i < 3; i++) {
+      if (body_position_delta[i] > MAX_STEP) {
+        body_position_delta[i] = MAX_STEP;
+      } else if (body_position_delta[i] < -MAX_STEP) {
+        body_position_delta[i] = -MAX_STEP;
+      }
+    }
+
+    Eigen::Vector3d enu_position_delta = BodyVelocity2ENU(body_position_delta);
+
+    // 计算目标位置
+    geometry_msgs::PoseStamped target_pose = current_pose_;
+    target_pose.pose.position.x += enu_position_delta.x();
+    target_pose.pose.position.y += enu_position_delta.y();
+    target_pose.pose.position.z += enu_position_delta.z();
+
+    switch (action->getHoldAxis()) {
+    case HoldAxis::X:
+      camera_aim_vector.x() = action->getTargetPose().pose.position.x;
+      break;
+    case HoldAxis::Y:
+      camera_aim_vector.y() = action->getTargetPose().pose.position.y;
+      break;
+    case HoldAxis::Z:
+      camera_aim_vector.z() = action->getTargetPose().pose.position.z;
+      break;
+    default:
+      break;
+    }
+
+    ROS_INFO("Current position: [%.2f, %.2f, %.2f]",
+             current_pose_.pose.position.x, current_pose_.pose.position.y,
+             current_pose_.pose.position.z);
+    ROS_INFO("Target position: [%.2f, %.2f, %.2f]", target_pose.pose.position.x,
+             target_pose.pose.position.y, target_pose.pose.position.z);
+    ROS_INFO("Position delta (ENU): [%.3f, %.3f, %.3f]", enu_position_delta.x(),
+             enu_position_delta.y(), enu_position_delta.z());
+
+    // 发送位置指令
+    sendPositionSetpoint(target_pose);
 
     setpoint_pub_.publish(vel_cmd);
   }
@@ -308,8 +338,17 @@ class ActionExecutor {
   // 执行起飞
   void executeTakeoff(std::shared_ptr<DroneAction> action) {
     geometry_msgs::PoseStamped takeoff_pose = current_pose_;
+    takeoff_pose.pose.position.x = 0.0;
+    takeoff_pose.pose.position.y = 0.0;
     takeoff_pose.pose.position.z = action->getTargetAltitude();
+    takeoff_pose.pose.orientation.x = 0.0;
+    takeoff_pose.pose.orientation.y = 0.0;
+    takeoff_pose.pose.orientation.z = 0.0;
+    takeoff_pose.pose.orientation.w = 1.0; // 无旋转
 
+    ROS_INFO("Sending takeoff command : [%.2f, %.2f, %.2f]",
+             takeoff_pose.pose.position.x, takeoff_pose.pose.position.y,
+             takeoff_pose.pose.position.z);
     SpatialPoint current(current_pose_);
     SpatialPoint target(takeoff_pose);
 
@@ -338,7 +377,7 @@ class ActionExecutor {
     last_camera_aim_time_ = ros::Time::now();
   }
 
- private:
+private:
   ros::NodeHandle &nh_;
   tf2_ros::Buffer &tf_buffer_;
 
@@ -367,6 +406,6 @@ class ActionExecutor {
   // 动作队列
   std::queue<std::shared_ptr<DroneAction>> action_queue_;
   std::shared_ptr<DroneAction> current_action_;
-  geometry_msgs::PoseStamped finish_pose_;  // 完成上一动作时的pose，用于hover
+  geometry_msgs::PoseStamped finish_pose_; // 完成上一动作时的pose，用于hover
   int action_id_ = 0;
 };

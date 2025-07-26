@@ -7,7 +7,13 @@ mission:
   actions:
     - type: "takeoff"
       altitude: 0.5
-      
+    
+    - type: "move"
+      position: [0.0, 0.0, 0.5]
+      yaw: 0.0
+      frame: "world_body"
+      tolerance: 0.1
+    
     - type: "land"
 
 # 系统参数

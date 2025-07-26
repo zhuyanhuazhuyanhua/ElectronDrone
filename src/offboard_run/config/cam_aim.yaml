@@ -15,9 +15,10 @@ mission:
       tolerance: 0.1
       
     - type: "camera_aim"
-      position: [1.0, 0.0, 0.6]
+      position: [0.0, 0.0, 0.6]
       yaw: 0.0
       frame: "world_body"
+      axis: "z"
       tolerance: 40.0  # 像素
       
     - type: "land"
