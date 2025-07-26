@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import cv2
+import rospy
+import numpy as np
+from std_srvs.srv import Trigger, TriggerResponse
+
+class CircleDetectionService:
+    def __init__(self):
+        rospy.init_node("circle_detect_server")
+        rospy.Service("circle_detect", Trigger, self.handle_circle_detection)
+        rospy.loginfo("圆形检测服务已启动...")
+        rospy.spin()
+
+    def hough_circle_detection(self, frame):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.medianBlur(gray, 5)
+
+        rows = gray.shape[0]
+        circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, rows / 8,
+                                  param1=100, param2=30,
+                                  minRadius=1, maxRadius=30)
+
+        if circles is not None:
+            return True
+        return False
+
+    def handle_circle_detection(self, req):
+        # 打开摄像头
+        cap = cv2.VideoCapture(0)
+
+        if not cap.isOpened():
+            rospy.logerr("无法打开摄像头")
+            return TriggerResponse(success=False, message="无法打开摄像头")
+
+        # 读取最新的一帧
+        ret, frame = cap.read()
+        cap.release()
+
+        if not ret:
+            rospy.logerr("无法读取图像")
+            return TriggerResponse(success=False, message="无法读取图像")
+
+        # 转换为灰度图像
+        im = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # 设置检测器参数
+        params = cv2.SimpleBlobDetector_Params()
+        params.minThreshold = 10
+        params.maxThreshold = 200
+        params.filterByArea = True
+        params.minArea = 1500
+        params.filterByCircularity = True
+        params.minCircularity = 0.1
+        params.filterByConvexity = True
+        params.minConvexity = 0.87
+        params.filterByInertia = True
+        params.minInertiaRatio = 0.01
+
+        # 创建检测器
+        ver = (cv2.__version__).split('.')
+        if int(ver[0]) < 3:
+            detector = cv2.SimpleBlobDetector(params)
+        else:
+            detector = cv2.SimpleBlobDetector_create(params)
+
+        # 获取参数对象
+        current_params = detector.getParams()
+
+        # 获取 minInertiaRatio 的值
+        min_inertia_ratio = current_params.minInertiaRatio
+        rospy.loginfo(f"minInertiaRatio 的值为: {min_inertia_ratio}")
+
+        # 检测斑点
+        keypoints = detector.detect(im)
+
+        # 检查是否检测到斑点
+        if keypoints:
+            rospy.loginfo("检测到斑点，进行二次检测...")
+            is_circle_detected = self.hough_circle_detection(frame)
+            if is_circle_detected:
+                rospy.loginfo("二次检测确认，检测到圆形。")
+                return TriggerResponse(success=True, message="二次检测确认，检测到圆形。")
+            else:
+                rospy.loginfo("二次检测未确认圆形。")
+                return TriggerResponse(success=False, message="二次检测未确认圆形。")
+        else:
+            rospy.loginfo("未检测到任何blob")
+            return TriggerResponse(success=False, message="未检测到任何blob")
+
+if __name__ == "__main__":
+    try:
+        circle_service = CircleDetectionService()
+    except rospy.ROSInterruptException:
+        pass

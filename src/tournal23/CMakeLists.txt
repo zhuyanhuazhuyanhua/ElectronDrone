@@ -146,7 +146,7 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(ctrl src/ctrl.cpp)
 add_executable(ctrl_test src/ctrl_fire_detect_test.cpp)
-
+add_executable(ctrl_test_black src/ctrl_black_detect_test.cpp)
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -162,6 +162,11 @@ target_link_libraries(ctrl
   ${catkin_LIBRARIES}
 )
 target_link_libraries(ctrl_test
+  ${catkin_LIBRARIES}
+  ${OpenCv_LIBS}
+
+)
+target_link_libraries(ctrl_test_black
   ${catkin_LIBRARIES}
   ${OpenCv_LIBS}
 
