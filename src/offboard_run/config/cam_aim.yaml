@@ -15,7 +15,7 @@ mission:
       tolerance: 0.1
       
     - type: "camera_aim"
-      position: [0.0, 0.0, 0.6]
+      position: [1.0, 0.0, 0.6]
       yaw: 0.0
       frame: "world_body"
       axis: "z"

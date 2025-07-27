@@ -9,7 +9,7 @@ mission:
       altitude: 1.0
     
     - type: "move"
-      position: [0.0, 0.0, 1.0]
+      position: [1.0, 0.0, 1.0]
       yaw: 0.0
       frame: "world_body"
       tolerance: 0.1
