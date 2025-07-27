@@ -13,7 +13,7 @@ class QRCodeService:
 
     def handle_qr_decode(self, req):
         # 每次服务调用时重新打开摄像头
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture('/dev/cameraforward')
 
         if not cap.isOpened():
             rospy.logerr("无法打开摄像头")

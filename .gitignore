@@ -4,3 +4,5 @@ build/
 devel/
 logs/
 *.bag
+*.pt
+*.jpg

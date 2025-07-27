@@ -4,32 +4,16 @@ from ultralytics import YOLO
 import cv2
 import time
 import logging
-import sys
-import rospy  # 添加 ROS 库
-from geometry_msgs.msg import Point  # 添加 Point 消息类型
 
 # 配置日志记录
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('inference_log.txt', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)  # 明确指定输出到标准输出
+        logging.FileHandler('inference_log.txt'),
+        logging.StreamHandler()
     ]
 )
-
-# 初始化 ROS 节点
-try:
-    # 初始化 ROS 节点，添加 anonymous=True 避免节点名冲突
-    rospy.init_node('yolo_detection_node', anonymous=True)
-    logging.info("ROS 节点初始化成功")
-except rospy.ROSException as e:
-    logging.error(f"ROS 节点初始化失败: {e}")
-    # 可以选择退出程序，或者进行其他处理
-    exit(1)
-
-# 创建发布者
-aiming_center_pub = rospy.Publisher('/camera_aiming_center_yolo', Point, queue_size=10)
 
 # 检查 CUDA 是否可用
 if not torch.cuda.is_available():
@@ -57,7 +41,7 @@ total_inference_time = 0
 frame_count = 0
 
 try:
-    while not rospy.is_shutdown():  # 使用 ROS 循环条件
+    while True:
         ret, frame = cap.read()
         if not ret:
             logging.error("读取帧失败，退出循环")
@@ -101,17 +85,6 @@ try:
             logging.info(f"帧 {frame_count} 检测框中心点平均值: cx = {avg_cx:.2f}, cy = {avg_cy:.2f}")
         else:
             logging.info(f"帧 {frame_count} 未检测到目标")
-            avg_cx = 320
-            avg_cy = 240
-
-        # 创建 Point 消息
-        aiming_center = Point()
-        aiming_center.x = 240-avg_cy  # 注意：根据需求调整 x 和 y 的赋值
-        aiming_center.y = 320-avg_cx
-        aiming_center.z = 0  # 二维图像，z 坐标设为 0
-
-        # 发布消息
-        aiming_center_pub.publish(aiming_center)
 
         annotated = results[0].plot()  # 画框
         cv2.imshow('YOLOv8 Real-time', annotated)
@@ -121,8 +94,7 @@ try:
 
 except KeyboardInterrupt:
     logging.info("用户中断程序")
-except rospy.ROSInterruptException:
-    pass
+
 finally:
     if frame_count > 0:
         # 计算平均推理时间

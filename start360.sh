@@ -1,1 +1,1 @@
-/home/bupt/lib_mid360/start360.sh
+/home/bupt/libs/start360.sh

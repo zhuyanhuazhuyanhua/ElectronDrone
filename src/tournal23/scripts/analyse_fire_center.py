@@ -28,7 +28,7 @@ class RedDetectionService:
 
     def handle_red_detection(self, req):
         # 每次服务调用时重新打开摄像头
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture('/dev/cameradown')
 
         if not cap.isOpened():
             rospy.logerr("无法打开摄像头")
