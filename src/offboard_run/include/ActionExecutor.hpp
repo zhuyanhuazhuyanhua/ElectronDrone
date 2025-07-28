@@ -20,6 +20,46 @@
 #include "std_msgs/String.h"
 #include "tf2/LinearMath/Matrix3x3.h"
 
+class Vec3dPID {
+ public:
+  Vec3dPID(double p, double i, double d)
+      : p_gain_(p),
+        i_gain_(i),
+        d_gain_(d),
+        integral_(0.0, 0.0, 0.0),
+        last_error_(0.0, 0.0, 0.0) {}
+
+  Eigen::Vector3d update(const Eigen::Vector3d &error, double dt) {
+    integral_ += error * dt;
+    Eigen::Vector3d derivative = (error - last_error_) / dt;
+    last_error_ = error;
+    return p_gain_ * error + i_gain_ * integral_ + d_gain_ * derivative;
+  }
+
+  Eigen::Vector3d update(const Eigen::Vector3d &error, ros::Time time_stamp) {
+    // 重载函数，使用默认dt
+    if (last_time_.isZero()) {
+      last_time_ = time_stamp;
+      return Eigen::Vector3d::Zero();
+    }
+    double dt = (time_stamp - last_time_).toSec();
+    last_time_ = time_stamp;
+    if (dt <= 0.0) {
+      ROS_WARN("Vec3dPID: dt is zero or negative, returning zero output.");
+      return Eigen::Vector3d::Zero();
+    }
+    return update(error, dt);  // 默认50Hz
+  }
+
+ private:
+  double p_gain_;
+  double i_gain_;
+  double d_gain_;
+  ros::Time last_time_;
+  Eigen::Vector3d integral_;
+  Eigen::Vector3d last_error_;
+};
+
 class ActionExecutor {
  public:
   ActionExecutor(ros::NodeHandle &nh, tf2_ros::Buffer &tf_buffer)
@@ -210,7 +250,7 @@ class ActionExecutor {
       if (aim_close_count_ > 20) {
         action->setStatus(ActionStatus::COMPLETED);
         current_action_.reset();
-        finish_pose_ = current_pose_;
+        last_finish_pose_ = current_pose_;
         ROS_INFO("Reached target position");
         aim_close_count_ = 0;
       }
@@ -224,14 +264,14 @@ class ActionExecutor {
   // 执行悬停
   void executeHover(std::shared_ptr<DroneAction> action) {
     // 保持上个动作结束位置
-    sendPositionSetpoint(finish_pose_);
+    sendPositionSetpoint(last_finish_pose_);
 
     // 检查悬停时间
     if ((ros::Time::now() - action->getStartTime()).toSec() >
         action->getHoverTime()) {
       action->setStatus(ActionStatus::COMPLETED);
       current_action_.reset();
-      finish_pose_ = current_pose_;
+      // last_finish_pose_ = current_pose_; // 不更改上次结束位置
       ROS_INFO("Hover completed");
     }
   }
@@ -244,6 +284,9 @@ class ActionExecutor {
       // TODO 添加超时多次退出
       ROS_WARN("Camera aim data timeout, executing position control!");
       executeMoveToPosition(action);
+      action->setStatus(ActionStatus::COMPLETED);
+      current_action_.reset();
+      aim_close_count_ = 0;
       return;
     }
 
@@ -254,7 +297,7 @@ class ActionExecutor {
       if (aim_close_count_ > 20) {
         action->setStatus(ActionStatus::COMPLETED);
         current_action_.reset();
-        finish_pose_ = current_pose_;
+        last_finish_pose_ = current_pose_;
         ROS_INFO("Camera aim completed");
         aim_close_count_ = 0;
       }
@@ -269,12 +312,13 @@ class ActionExecutor {
              camera_aim_vector.y(), camera_aim_vector.z());
 
     // 发送速度控制指令进行对准
-    mavros_msgs::PositionTarget vel_cmd;
     static constexpr double P_gain = 0.005;
-    static constexpr double MAX_STEP = 0.1;  // 最大单步移动距离（米）
+    static constexpr double MAX_STEP = 0.05;  // 最大单步移动距离（米）
 
     // 计算机体坐标系下的位置增量
-    Eigen::Vector3d body_position_delta = camera_aim_vector * P_gain;
+    // Eigen::Vector3d body_position_delta = camera_aim_vector * P_gain;
+    Eigen::Vector3d body_position_delta = pid_cam_aim_.update(
+        camera_aim_vector, ros::Time::now());  // 使用PID控制
 
     // 限制最大移动步长
     for (int i = 0; i < 3; i++) {
@@ -306,7 +350,8 @@ class ActionExecutor {
       default:
         break;
     }
-
+    ROS_INFO("PID OUTOUT: [%.3f, %.3f, %.3f]", body_position_delta.x(),
+             body_position_delta.y(), body_position_delta.z());
     ROS_INFO("Current position: [%.2f, %.2f, %.2f]",
              current_pose_.pose.position.x, current_pose_.pose.position.y,
              current_pose_.pose.position.z);
@@ -317,131 +362,19 @@ class ActionExecutor {
 
     // 发送位置指令
     sendPositionSetpoint(target_pose);
-
-    setpoint_pub_.publish(vel_cmd);
   }
 
   // 执行降落
   void executeLand(std::shared_ptr<DroneAction> action) {
-    // 降落参数配置
-    static constexpr double APPROACH_SPEED = 0.5;    // 接近速度 m/s
-    static constexpr double FINAL_SPEED = 0.2;       // 最终降落速度 m/s
-    static constexpr double APPROACH_HEIGHT = 1.0;   // 开始减速的高度
-    static constexpr double TOUCHDOWN_HEIGHT = 0.4;  // 触地判定高度
-    static constexpr double DISARM_HEIGHT = 0.2;     // 解锁高度
-    static constexpr int STABLE_COUNT_THRESHOLD =
-        10;  // 稳定计数阈值（0.5秒@50Hz）
+    // 切换到降落模式
+    mavros_msgs::SetMode land_mode;
+    land_mode.request.custom_mode = "AUTO.LAND";
 
-    // 初始化降落状态
-    if (!landing_state_.initialized) {
-      landing_state_.initialized = true;
-      landing_state_.start_pose = finish_pose_;
-      landing_state_.start_time = ros::Time::now();
-      landing_state_.ground_height = 0.0;
-      landing_state_.stable_count = 0;
-
-      ROS_INFO("OFFBOARD Landing initiated from height: %.2f m",
-               current_pose_.pose.position.z - landing_state_.ground_height);
-    }
-
-    // 计算当前高度（相对地面）
-    double current_height = current_pose_.pose.position.z;
-    double elapsed_time =
-        (ros::Time::now() - landing_state_.start_time).toSec();
-
-    // 准备降落位置指令
-    geometry_msgs::PoseStamped land_pose = current_pose_;
-
-    // 保持XY位置不变
-    land_pose.pose.position.x = landing_state_.start_pose.pose.position.x;
-    land_pose.pose.position.y = landing_state_.start_pose.pose.position.y;
-
-    // 最重要：保持yaw角不变
-    land_pose.pose.orientation = landing_state_.start_pose.pose.orientation;
-
-    // 根据高度决定降落阶段
-    if (current_height > APPROACH_HEIGHT) {
-      // 阶段1：快速接近
-      static constexpr double dt = 0.02;  // 50Hz
-      land_pose.pose.position.z -= APPROACH_SPEED * dt;
-
-      ROS_INFO_THROTTLE(
-          1.0, "Landing Phase 1 - Approaching: height=%.2f m, speed=%.2f m/s",
-          current_height, APPROACH_SPEED);
-
-    } else if (current_height > TOUCHDOWN_HEIGHT) {
-      // 阶段2：减速降落
-      static constexpr double dt = 0.02;  // 50Hz
-      land_pose.pose.position.z -= FINAL_SPEED * dt;
-
-      ROS_INFO_THROTTLE(
-          1.0,
-          "Landing Phase 2 - Final approach: height=%.2f m, speed=%.2f m/s",
-          current_height, FINAL_SPEED);
-
-    } else if (current_height > DISARM_HEIGHT) {
-      // 阶段3：触地阶段
-      land_pose.pose.position.z = landing_state_.ground_height;
-
-      // 检查是否落地
-      if (current_pose_.pose.position.z < 0.1) {  // 10cm误差范围内认为稳定
-        landing_state_.stable_count++;
-      } else {
-        landing_state_.stable_count = 0;
-      }
-
-      ROS_INFO_THROTTLE(
-          0.5, "Landing Phase 3 - Touchdown: height=%.3f m, stable_count=%d/%d",
-          current_height, landing_state_.stable_count, STABLE_COUNT_THRESHOLD);
-
-    } else {
-      // 阶段4：已着陆，准备disarm
-      landing_state_.stable_count++;
-      land_pose.pose.position.z = landing_state_.ground_height;
-
-      if (landing_state_.stable_count >= STABLE_COUNT_THRESHOLD) {
-        // 尝试解锁
-        mavros_msgs::CommandBool disarm_cmd;
-        disarm_cmd.request.value = false;  // false = 解锁
-
-        if (arming_client_.call(disarm_cmd)) {
-          if (disarm_cmd.response.success) {
-            ROS_INFO("Landing completed successfully! Vehicle disarmed.");
-            ROS_INFO("Total landing time: %.2f seconds", elapsed_time);
-
-            // 标记动作完成
-            action->setStatus(ActionStatus::COMPLETED);
-            current_action_.reset();
-            finish_pose_ = current_pose_;
-
-            // 重置降落状态
-            landing_state_.initialized = false;
-            landing_state_.stable_count = 0;
-          } else {
-            ROS_WARN("Disarm command failed, retrying...");
-          }
-        } else {
-          ROS_ERROR("Failed to call disarm service");
-        }
-      }
-    }
-
-    // 发送位置指令
-    sendPositionSetpoint(land_pose);
-
-    // 安全检查：超时保护
-    if (elapsed_time > 5.0) {  // 5秒超时
-      ROS_ERROR("Landing timeout! Switching to AUTO.LAND for safety.");
-
-      // 切换到AUTO.LAND作为备份
-      mavros_msgs::SetMode land_mode;
-      land_mode.request.custom_mode = "AUTO.LAND";
-
-      if (set_mode_client_.call(land_mode) && land_mode.response.mode_sent) {
-        action->setStatus(ActionStatus::COMPLETED);
-        current_action_.reset();
-        landing_state_.initialized = false;
-      }
+    if (set_mode_client_.call(land_mode) && land_mode.response.mode_sent) {
+      action->setStatus(ActionStatus::COMPLETED);
+      current_action_.reset();
+      last_finish_pose_ = current_pose_;
+      ROS_INFO("Landing initiated");
     }
   }
 
@@ -469,7 +402,7 @@ class ActionExecutor {
     if (std::abs(current.z - target.z) < action->getPositionTolerance()) {
       action->setStatus(ActionStatus::COMPLETED);
       current_action_.reset();
-      finish_pose_ = current_pose_;
+      last_finish_pose_ = current_pose_;
       ROS_INFO("Takeoff completed");
     } else {
       sendPositionSetpoint(takeoff_pose);
@@ -494,6 +427,8 @@ class ActionExecutor {
  private:
   ros::NodeHandle &nh_;
   tf2_ros::Buffer &tf_buffer_;
+
+  Vec3dPID pid_cam_aim_{0.001, 0.0, 0.0001};
 
   // 发布器和订阅器
   ros::Publisher setpoint_pub_;
@@ -529,6 +464,7 @@ class ActionExecutor {
   // 动作队列
   std::queue<std::shared_ptr<DroneAction>> action_queue_;
   std::shared_ptr<DroneAction> current_action_;
-  geometry_msgs::PoseStamped finish_pose_;  // 完成上一动作时的pose，用于hover
+  geometry_msgs::PoseStamped
+      last_finish_pose_;  // 完成上一动作时的pose，用于hover
   int action_id_ = 0;
 };
