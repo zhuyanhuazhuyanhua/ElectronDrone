@@ -3,7 +3,9 @@
 #include <XmlRpcValue.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <mavros_msgs/CommandBool.h>
-#ifdef ENABLE_PX4_REBOOT // 【修改1】条件编译：仅在启用时包含CommandLong头文件
+
+#include "DroneAction.hpp"
+#ifdef ENABLE_PX4_REBOOT  // 【修改1】条件编译：仅在启用时包含CommandLong头文件
 #include <mavros_msgs/CommandLong.h>
 #endif
 #include <mavros_msgs/SetMode.h>
@@ -22,7 +24,7 @@
 #include "tf2/LinearMath/Quaternion.h"
 
 class MissionController {
-public:
+ public:
   MissionController(ros::NodeHandle &nh) : nh_(nh), tf_listener_(tf_buffer_) {
     // 系统参数
     nh.param("system/use_camera_aim", use_camera_aim_, false);
@@ -34,7 +36,7 @@ public:
     ROS_INFO("  Auto start mission: %s",
              auto_start_mission_ ? "true" : "false");
     ROS_INFO("  Takeoff altitude: %.2f", takeoff_altitude_);
-#ifdef ENABLE_PX4_REBOOT // 【修改2】条件编译：仅在启用时输出重启相关配置
+#ifdef ENABLE_PX4_REBOOT  // 【修改2】条件编译：仅在启用时输出重启相关配置
     ROS_INFO("  PX4 Auto Reboot: ENABLED");
     ROS_INFO("  Max arm retries: %d", MAX_ARM_RETRIES);
     ROS_INFO("  Arm retry interval: %.1f seconds", ARM_RETRY_INTERVAL);
@@ -60,7 +62,7 @@ public:
         nh_.serviceClient<mavros_msgs::CommandBool>("/mavros/cmd/arming");
     set_mode_client_ =
         nh_.serviceClient<mavros_msgs::SetMode>("/mavros/set_mode");
-#ifdef ENABLE_PX4_REBOOT // 【修改3】条件编译：仅在启用时创建command客户端
+#ifdef ENABLE_PX4_REBOOT  // 【修改3】条件编译：仅在启用时创建command客户端
     command_client_ =
         nh_.serviceClient<mavros_msgs::CommandLong>("/mavros/cmd/command");
 #endif
@@ -99,11 +101,11 @@ public:
     action_executor_->controlLoop();
   }
 
-private:
-#ifdef ENABLE_PX4_REBOOT // 【修改4】条件编译：预设重启相关常量
-  static constexpr int MAX_ARM_RETRIES = 5;         // 最大重试次数
-  static constexpr double ARM_RETRY_INTERVAL = 2.0; // 重试间隔（秒）
-  static constexpr double REBOOT_WAIT_TIME = 10.0; // 重启后等待时间（秒）
+ private:
+#ifdef ENABLE_PX4_REBOOT  // 【修改4】条件编译：预设重启相关常量
+  static constexpr int MAX_ARM_RETRIES = 5;          // 最大重试次数
+  static constexpr double ARM_RETRY_INTERVAL = 2.0;  // 重试间隔（秒）
+  static constexpr double REBOOT_WAIT_TIME = 10.0;  // 重启后等待时间（秒）
 #endif
 
   bool loadMissionFromParam() {
@@ -160,7 +162,14 @@ private:
         q.setRPY(0, 0, yaw);
         target.pose.orientation = tf2::toMsg(q);
 
-        bool use_body_frame = (frame == "world_body");
+        DroneAction::Frame use_body_frame;
+        if (frame == "world_body") {
+          use_body_frame = DroneAction::Frame::WORLD_BODY;
+        } else if (frame == "body") {
+          use_body_frame = DroneAction::Frame::BODY;
+        } else {
+          use_body_frame = DroneAction::Frame::WORLD_ENU;
+        }
         action =
             DroneAction::createMoveToAction(target, use_body_frame, tolerance);
         ROS_INFO(
@@ -220,22 +229,22 @@ private:
     return !mission_actions_.empty();
   }
 
-#ifdef ENABLE_PX4_REBOOT // 【修改5】条件编译：仅在启用时包含PX4重启函数
+#ifdef ENABLE_PX4_REBOOT  // 【修改5】条件编译：仅在启用时包含PX4重启函数
   // PX4重启函数
   bool rebootPX4() {
     ROS_WARN("Attempting to reboot PX4...");
 
     mavros_msgs::CommandLong reboot_cmd;
     reboot_cmd.request.broadcast = false;
-    reboot_cmd.request.command = 246; // MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN
+    reboot_cmd.request.command = 246;  // MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN
     reboot_cmd.request.confirmation = 0;
-    reboot_cmd.request.param1 = 1; // 1: reboot autopilot
-    reboot_cmd.request.param2 = 0; // 0: do nothing for onboard computer
-    reboot_cmd.request.param3 = 0; // reserved
-    reboot_cmd.request.param4 = 0; // reserved
-    reboot_cmd.request.param5 = 0; // reserved
-    reboot_cmd.request.param6 = 0; // reserved
-    reboot_cmd.request.param7 = 0; // reserved
+    reboot_cmd.request.param1 = 1;  // 1: reboot autopilot
+    reboot_cmd.request.param2 = 0;  // 0: do nothing for onboard computer
+    reboot_cmd.request.param3 = 0;  // reserved
+    reboot_cmd.request.param4 = 0;  // reserved
+    reboot_cmd.request.param5 = 0;  // reserved
+    reboot_cmd.request.param6 = 0;  // reserved
+    reboot_cmd.request.param7 = 0;  // reserved
 
     if (command_client_.call(reboot_cmd)) {
       if (reboot_cmd.response.success) {
@@ -270,7 +279,7 @@ private:
              initialized_ ? "true" : "false", tf_ready_ ? "true" : "false",
              current_state_.connected ? "true" : "false");
 
-#ifdef ENABLE_PX4_REBOOT // 【修改6】条件编译：仅在启用时包含重启后等待逻辑
+#ifdef ENABLE_PX4_REBOOT  // 【修改6】条件编译：仅在启用时包含重启后等待逻辑
     // 如果刚重启完成，等待一段时间
     if (waiting_after_reboot_) {
       double elapsed = (ros::Time::now() - reboot_start_time_).toSec();
@@ -321,13 +330,13 @@ private:
       }
       // 解锁
       else if (!current_state_.armed) {
-#ifdef ENABLE_PX4_REBOOT // 【修改7】条件编译：仅在启用时使用重试逻辑，否则使用原始逻辑
+#ifdef ENABLE_PX4_REBOOT  // 【修改7】条件编译：仅在启用时使用重试逻辑，否则使用原始逻辑
         // 带重试机制的解锁逻辑
         // 检查是否需要等待重试间隔
         if (arm_retry_count_ > 0) {
           double elapsed = (ros::Time::now() - last_arm_attempt_).toSec();
           if (elapsed < ARM_RETRY_INTERVAL) {
-            return; // 还在等待重试间隔
+            return;  // 还在等待重试间隔
           }
         }
 
@@ -361,7 +370,7 @@ private:
             ROS_INFO("Vehicle armed successfully on attempt %d",
                      arm_retry_count_);
             initialized_ = true;
-            arm_retry_count_ = 0; // 重置重试计数
+            arm_retry_count_ = 0;  // 重置重试计数
             init_timer_.stop();
 
             // 如果配置为自动开始任务
@@ -500,7 +509,7 @@ private:
     stopMission();
   }
 
-private:
+ private:
   ros::NodeHandle &nh_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
@@ -514,7 +523,7 @@ private:
   // 服务客户端
   ros::ServiceClient arming_client_;
   ros::ServiceClient set_mode_client_;
-#ifdef ENABLE_PX4_REBOOT // 【修改8】条件编译：仅在启用时声明command客户端
+#ifdef ENABLE_PX4_REBOOT  // 【修改8】条件编译：仅在启用时声明command客户端
   ros::ServiceClient command_client_;
 #endif
 
@@ -539,12 +548,12 @@ private:
   double takeoff_altitude_ = 1.2;
   mavros_msgs::State current_state_;
 
-#ifdef ENABLE_PX4_REBOOT // 【修改9】条件编译：仅在启用时声明重试相关成员变量
+#ifdef ENABLE_PX4_REBOOT  // 【修改9】条件编译：仅在启用时声明重试相关成员变量
   // 解锁重试相关变量
-  int arm_retry_count_ = 0;           // 当前重试次数
-  ros::Time last_arm_attempt_;        // 上次解锁尝试时间
-  bool waiting_after_reboot_ = false; // 是否正在等待重启完成
-  ros::Time reboot_start_time_;       // 重启开始时间
+  int arm_retry_count_ = 0;            // 当前重试次数
+  ros::Time last_arm_attempt_;         // 上次解锁尝试时间
+  bool waiting_after_reboot_ = false;  // 是否正在等待重启完成
+  ros::Time reboot_start_time_;        // 重启开始时间
 #endif
 };
 
@@ -554,7 +563,7 @@ int main(int argc, char **argv) {
 
   try {
     MissionController controller(nh);
-    ros::Rate rate(50); // 50Hz 控制频率
+    ros::Rate rate(50);  // 50Hz 控制频率
     while (ros::ok()) {
       controller.controlLoop();
       ros::spinOnce();

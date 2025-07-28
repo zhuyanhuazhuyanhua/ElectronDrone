@@ -192,15 +192,22 @@ class ActionExecutor {
     geometry_msgs::PoseStamped target = action->getTargetPose();
 
     // 如果需要坐标转换
-    if (action->useBodyFrame()) {
+    if (action->useBodyFrame() == DroneAction::Frame::WORLD_BODY) {
       try {
         target = tf_buffer_.transform(target, "world_enu", ros::Duration(0.1));
       } catch (tf2::TransformException &ex) {
         ROS_WARN("Transform failed: %s", ex.what());
         return;
       }
+    } else if (action->useBodyFrame() == DroneAction::Frame::BODY) {
+      Eigen::Vector3d X = BodyVelocity2ENU(
+          Eigen::Vector3d(target.pose.position.x, target.pose.position.y,
+                          target.pose.position.z));
+      target = finish_pose_;
+      target.pose.position.x += X.x();
+      target.pose.position.y += X.y();
+      target.pose.position.z += X.z();
     }
-
     // 检查是否到达目标位置
     SpatialPoint current(current_pose_);
     SpatialPoint target_point(target);
