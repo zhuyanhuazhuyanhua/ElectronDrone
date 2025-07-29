@@ -243,7 +243,7 @@ class ActionExecutor {
       Eigen::Vector3d X = BodyVelocity2ENU(
           Eigen::Vector3d(target.pose.position.x, target.pose.position.y,
                           target.pose.position.z));
-      target = finish_pose_;
+      target = last_finish_pose_;
       target.pose.position.x += X.x();
       target.pose.position.y += X.y();
       target.pose.position.z += X.z();
