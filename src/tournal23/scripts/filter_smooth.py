@@ -28,11 +28,39 @@ class BlackDetection:
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.cap.set(cv2.CAP_PROP_FPS, 30)
 
+        # 初始化移动平均滤波参数
+        self.window_size = 5  # 滤波窗口大小
+        self.x_history = []
+        self.y_history = []
+
     def odom_callback(self, msg):
         global latest_x, latest_y
         # 提取 pose.pose.position.x 和 pose.pose.position.y
         latest_x = msg.pose.pose.position.x
         latest_y = msg.pose.pose.position.y
+
+    def moving_average_filter(self, new_x, new_y):
+        """
+        移动平均滤波方法，对新的 x 和 y 坐标进行滤波处理。
+
+        :param new_x: 新的 x 坐标
+        :param new_y: 新的 y 坐标
+        :return: 滤波后的 x 和 y 坐标
+        """
+        self.x_history.append(new_x)
+        self.y_history.append(new_y)
+
+        # 保持历史数据列表长度不超过窗口大小
+        if len(self.x_history) > self.window_size:
+            self.x_history.pop(0)
+        if len(self.y_history) > self.window_size:
+            self.y_history.pop(0)
+
+        # 计算移动平均值
+        filtered_x = np.mean(self.x_history)
+        filtered_y = np.mean(self.y_history)
+
+        return filtered_x, filtered_y
 
     def run_detection(self):
         print("按 q 退出")
@@ -104,14 +132,16 @@ class BlackDetection:
             cv2.putText(gray, f"({cX}, {cY})", (cX + 10, cY + 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)  # 显示坐标
 
-            # 显示处理后的图像
             cv2.imshow("Gray Frame", gray)
-
 
             # 创建 Point 消息
             aiming_center = Point()
-            aiming_center.x = 240-cY
-            aiming_center.y = 320-cX
+            raw_x = 240 - cY
+            raw_y = 320 - cX
+            # 应用移动平均滤波
+            filtered_x, filtered_y = self.moving_average_filter(raw_x, raw_y)
+            aiming_center.x = filtered_x
+            aiming_center.y = filtered_y
             aiming_center.z = 0  # 二维图像，z 坐标设为 0
 
             # 发布消息

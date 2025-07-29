@@ -1,18 +1,18 @@
 # Mission configuration
 mission:
   # 起飞高度
-  takeoff_altitude: 1.0
+  takeoff_altitude: 0.5
   
   # 任务序列
   actions:
     - type: "takeoff"
-      altitude: 1.0
+      altitude: 0.5
     
-    - type: "move"
-      position: [1.0, 0.0, 1.0]
-      yaw: 0.0
-      frame: "world_body"
-      tolerance: 0.1
+    # - type: "move"
+    #   position: [0.0, 0.0, 1.0]
+    #   yaw: 0.0
+    #   frame: "world_body"
+    #   tolerance: 0.1
     
     - type: "land"
 

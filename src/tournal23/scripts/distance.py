@@ -49,7 +49,7 @@ if __name__ == "__main__":
     calculator = DistanceCalculator(KNOWN_WIDTH, FX, FY)
 
     # 打开 /dev/video0 摄像头
-    cap = cv2.VideoCapture('/dev/cameradown')
+    cap = cv2.VideoCapture('/dev/camera_forward')
 
     if not cap.isOpened():
         print("无法打开摄像头")
