@@ -6,3 +6,4 @@ logs/
 *.bag
 *.pt
 *.jpg
+*.log
